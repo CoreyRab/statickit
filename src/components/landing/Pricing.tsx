@@ -27,7 +27,7 @@ const plans = [
     features: [
       '200 generations/month',
       'Unlimited projects',
-      'Multi-size export',
+      'Resize with AI',
       'Batch processing',
       'Priority support',
     ],

@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AdForge - AI Ad Variation Generator",
+  title: "StaticKit - AI Ad Variation Generator",
   description: "Turn one winning ad into five. Generate AI-powered ad variations for A/B testing in minutes.",
   keywords: ["ad generator", "AI advertising", "ad variations", "A/B testing", "meta ads", "google ads"],
 };

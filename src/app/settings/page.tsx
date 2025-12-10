@@ -90,10 +90,8 @@ export default function SettingsPage() {
       <header className="border-b border-white/10 bg-[#0f0f0f]/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-semibold">
-            <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-lg">AdForge</span>
+            <img src="/logo.svg" alt="StaticKit" className="w-7 h-7" />
+            <span className="text-lg">StaticKit</span>
           </Link>
 
           <div className="flex items-center gap-3">

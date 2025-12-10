@@ -998,20 +998,19 @@ function HomeContent() {
   const completedCount = variations.filter(v => v.status === 'completed').length;
   const generatingCount = variations.filter(v => v.status === 'generating').length;
 
-  // TEMP: Disabled auth for testing
   // Show landing page for non-authenticated users
-  // if (isUserLoaded && !user) {
-  //   return <LandingPage />;
-  // }
+  if (isUserLoaded && !user) {
+    return <LandingPage />;
+  }
 
-  // // Show loading while checking auth
-  // if (!isUserLoaded) {
-  //   return (
-  //     <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center">
-  //       <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
-  //     </div>
-  //   );
-  // }
+  // Show loading while checking auth
+  if (!isUserLoaded) {
+    return (
+      <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-white">
@@ -1019,10 +1018,8 @@ function HomeContent() {
       <header className="border-b border-white/10 bg-[#0f0f0f]/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2 font-semibold">
-            <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-indigo-600 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-lg">AdForge</span>
+            <img src="/logo.svg" alt="StaticKit" className="w-7 h-7" />
+            <span className="text-lg">StaticKit</span>
           </div>
 
           <div className="flex items-center gap-3">

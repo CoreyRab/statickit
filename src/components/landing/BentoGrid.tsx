@@ -6,25 +6,25 @@ import {
   MessageSquare,
   Sliders,
   History,
-  Download,
+  CameraOff,
 } from 'lucide-react';
 
 const features = [
   {
-    title: 'Scene variations',
-    description: 'Same product, different environments. Coffee shop, home office, outdoor — AI places your product anywhere.',
+    title: 'Instant variations',
+    description: 'New locations, poses, outfits, lighting. Generated instantly.',
     icon: Image,
     color: 'text-violet-400',
   },
   {
-    title: 'Multi-size export',
-    description: '1:1, 9:16, 16:9, 4:5 — generate every format from a single image. One click.',
-    icon: Maximize2,
+    title: 'No reshoot needed',
+    description: 'Skip the studio. Skip the photographer. Get new creative from existing assets.',
+    icon: CameraOff,
     color: 'text-blue-400',
   },
   {
     title: 'Natural language edits',
-    description: '"Make the lighting warmer" or "add a plant". Refine any generation with plain English.',
+    description: '"Make the lighting warmer" or "remove the flowers". Edit with plain English.',
     icon: MessageSquare,
     color: 'text-emerald-400',
   },
@@ -41,9 +41,9 @@ const features = [
     color: 'text-orange-400',
   },
   {
-    title: 'Bulk download',
-    description: 'All variations. All sizes. One ZIP. Ready for your ad platform.',
-    icon: Download,
+    title: 'Resize with AI',
+    description: '1:1, 9:16, 16:9, 4:5. Generate every format from a single image. One click.',
+    icon: Maximize2,
     color: 'text-cyan-400',
   },
 ];

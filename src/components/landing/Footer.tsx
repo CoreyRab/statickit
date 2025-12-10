@@ -10,10 +10,8 @@ export function Footer() {
         <div className="grid md:grid-cols-4 gap-8">
           <div>
             <Link href="/" className="flex items-center gap-2 font-bold text-lg mb-4">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span>AdForge</span>
+              <img src="/logo.svg" alt="StaticKit" className="w-8 h-8" />
+              <span>StaticKit</span>
             </Link>
             <p className="text-sm text-muted-foreground">
               AI-powered ad variation tool for performance marketers.
@@ -51,7 +49,7 @@ export function Footer() {
         </div>
 
         <div className="border-t mt-8 pt-8 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} AdForge. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} StaticKit. All rights reserved.</p>
         </div>
       </div>
     </footer>
