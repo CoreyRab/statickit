@@ -14,7 +14,7 @@ const features = [
     title: 'Change locations',
     description: 'Same ad, new backdrop with perfect lighting and shadows everytime.',
     icon: MapPin,
-    color: 'text-violet-400',
+    color: 'text-primary',
   },
   {
     title: 'New models',
@@ -50,9 +50,9 @@ const features = [
 
 export function BentoGrid() {
   return (
-    <section className="py-16 px-6 border-t border-white/5">
+    <section className="py-16 px-6 border-t border-border">
       <div className="max-w-4xl mx-auto">
-        <h2 className="text-sm font-medium text-white/40 uppercase tracking-wide mb-8">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-8">
           What you get
         </h2>
 
@@ -63,9 +63,9 @@ export function BentoGrid() {
               <div key={feature.title}>
                 <div className="flex items-center gap-2 mb-2">
                   <Icon className={`w-4 h-4 ${feature.color}`} />
-                  <h3 className="text-white font-medium">{feature.title}</h3>
+                  <h3 className="text-foreground font-medium">{feature.title}</h3>
                 </div>
-                <p className="text-sm text-white/40 leading-relaxed">{feature.description}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
               </div>
             );
           })}

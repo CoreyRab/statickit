@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { SignInButton, useUser } from '@clerk/nextjs';
 import { Check, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 type PlanKey = 'starter' | 'pro' | 'ultra';
 
@@ -98,90 +101,88 @@ export function Pricing() {
   };
 
   return (
-    <section id="pricing" className="py-20 px-6 border-t border-white/5">
+    <section id="pricing" className="py-20 px-6 border-t border-border">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-12">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
+          <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-3">
             Simple pricing
           </h2>
-          <p className="text-white/50">
+          <p className="text-muted-foreground">
             Choose the plan that fits your needs.
           </p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
           {plans.map((plan) => (
-            <div
+            <Card
               key={plan.key}
-              className={`rounded-xl p-6 relative flex flex-col ${
+              className={`relative flex flex-col ${
                 plan.popular
-                  ? 'bg-violet-500/10 border-2 border-violet-500/50'
-                  : 'bg-white/5 border border-white/10'
+                  ? 'border-2 border-primary bg-primary/5'
+                  : ''
               }`}
             >
               {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-violet-500 text-white px-3 py-1 rounded-full text-xs font-medium">
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">
                   Most Popular
-                </div>
+                </Badge>
               )}
 
-              <div className="mb-6">
-                <h3 className="font-semibold text-lg text-white mb-1">{plan.name}</h3>
-                <p className="text-white/50 text-sm mb-4">{plan.description}</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold text-white">{plan.price}</span>
-                  <span className="text-white/50">{plan.period}</span>
+              <CardHeader>
+                <CardTitle>{plan.name}</CardTitle>
+                <CardDescription>{plan.description}</CardDescription>
+                <div className="flex items-baseline gap-1 pt-2">
+                  <span className="text-4xl font-bold text-foreground">{plan.price}</span>
+                  <span className="text-muted-foreground">{plan.period}</span>
                 </div>
-              </div>
+              </CardHeader>
 
-              <ul className="space-y-3 flex-1">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm text-white/70">
-                    <Check className={`w-4 h-4 flex-shrink-0 ${plan.popular ? 'text-violet-400' : 'text-white/40'}`} />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
+              <CardContent className="flex-1">
+                <ul className="space-y-3">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Check className={`w-4 h-4 flex-shrink-0 ${plan.popular ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
 
-              {isLoaded && isSignedIn ? (
-                <button
-                  onClick={() => handleCheckout(plan.key)}
-                  disabled={loadingPlan !== null}
-                  className={`w-full py-2.5 rounded-lg font-medium transition-colors mt-6 flex items-center justify-center gap-2 ${
-                    plan.popular
-                      ? 'bg-violet-500 hover:bg-violet-400 text-white disabled:bg-violet-500/50'
-                      : 'bg-white/10 hover:bg-white/20 text-white disabled:bg-white/5'
-                  }`}
-                >
-                  {loadingPlan === plan.key ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    'Subscribe'
-                  )}
-                </button>
-              ) : (
-                <SignInButton mode="modal">
-                  <button
-                    className={`w-full py-2.5 rounded-lg font-medium transition-colors mt-6 ${
-                      plan.popular
-                        ? 'bg-violet-500 hover:bg-violet-400 text-white'
-                        : 'bg-white/10 hover:bg-white/20 text-white'
-                    }`}
+              <CardFooter>
+                {isLoaded && isSignedIn ? (
+                  <Button
+                    onClick={() => handleCheckout(plan.key)}
+                    disabled={loadingPlan !== null}
+                    variant={plan.popular ? 'default' : 'outline'}
+                    className="w-full"
                   >
-                    Get started
-                  </button>
-                </SignInButton>
-              )}
-            </div>
+                    {loadingPlan === plan.key ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      'Subscribe'
+                    )}
+                  </Button>
+                ) : (
+                  <SignInButton mode="modal">
+                    <Button
+                      variant={plan.popular ? 'default' : 'outline'}
+                      className="w-full"
+                    >
+                      Get started
+                    </Button>
+                  </SignInButton>
+                )}
+              </CardFooter>
+            </Card>
           ))}
         </div>
 
-        <p className="text-center text-sm text-white/40 mt-10">
+        <p className="text-center text-sm text-muted-foreground mt-10">
           All plans include a 7-day money-back guarantee. Need more?{' '}
-          <a href="mailto:hello@statickit.com" className="text-white/60 hover:text-white underline underline-offset-2">
+          <a href="mailto:hello@statickit.com" className="text-foreground hover:underline underline-offset-2">
             Contact us
           </a>{' '}
           for enterprise plans.

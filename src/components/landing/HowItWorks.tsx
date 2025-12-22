@@ -1,6 +1,7 @@
 'use client';
 
 import { Upload, Sparkles, Download, ArrowRight } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 
 const steps = [
   {
@@ -31,7 +32,7 @@ const steps = [
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="py-20 px-6 border-t border-white/5">
+    <section id="how-it-works" className="py-20 px-6 border-t border-border">
       {/* Keyframe animations */}
       <style jsx>{`
         @keyframes gradient-rotate {
@@ -53,10 +54,10 @@ export function HowItWorks() {
       <div className="max-w-5xl mx-auto">
         {/* Section header */}
         <div className="text-center mb-12">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
+          <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-3">
             Three steps to more creative
           </h2>
-          <p className="text-white/50">
+          <p className="text-muted-foreground">
             From upload to A/B-ready variations in under a minute
           </p>
         </div>
@@ -64,7 +65,7 @@ export function HowItWorks() {
         {/* Steps */}
         <div className="relative">
           {/* Connection line */}
-          <div className="hidden lg:block absolute top-1/2 left-0 right-0 h-px bg-white/10 -translate-y-1/2" />
+          <div className="hidden lg:block absolute top-1/2 left-0 right-0 h-px bg-border -translate-y-1/2" />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             {steps.map((step, index) => {
@@ -84,7 +85,7 @@ export function HowItWorks() {
                         }}
                       />
                       {/* Inner mask to create border effect */}
-                      <div className="absolute inset-[1px] rounded-xl bg-[#0a0a0a]" />
+                      <div className="absolute inset-[1px] rounded-xl bg-background" />
                     </div>
                   )}
 
@@ -99,36 +100,36 @@ export function HowItWorks() {
                   )}
 
                   {/* Step card */}
-                  <div className={`relative z-10 bg-[#0a0a0a] rounded-xl p-6 h-full ${
+                  <Card className={`relative z-10 p-6 h-full ${
                     step.isGenerate
-                      ? ''
-                      : 'border border-white/10'
+                      ? 'border-0 bg-background'
+                      : ''
                   }`}>
                     {/* Step number */}
                     <div className={`text-4xl font-bold mb-3 ${
-                      step.isGenerate ? 'bg-gradient-to-r from-blue-400 via-green-400 via-yellow-400 via-orange-400 to-pink-400 bg-clip-text text-transparent' : 'text-white/10'
+                      step.isGenerate ? 'bg-gradient-to-r from-blue-400 via-green-400 via-yellow-400 via-orange-400 to-pink-400 bg-clip-text text-transparent' : 'text-muted-foreground/20'
                     }`}>{step.number}</div>
 
                     {/* Icon */}
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-4 ${
                       step.isGenerate
-                        ? 'bg-gradient-to-br from-blue-500/20 via-green-500/20 to-pink-500/20 border border-white/10'
-                        : 'bg-white/5 border border-white/10'
+                        ? 'bg-gradient-to-br from-blue-500/20 via-green-500/20 to-pink-500/20 border border-border'
+                        : 'bg-muted border border-border'
                     }`}>
-                      <Icon className={`w-5 h-5 ${step.isGenerate ? 'text-white' : 'text-white/50'}`} />
+                      <Icon className={`w-5 h-5 ${step.isGenerate ? 'text-foreground' : 'text-muted-foreground'}`} />
                     </div>
 
                     {/* Content */}
-                    <h3 className="text-lg font-semibold text-white mb-1">{step.title}</h3>
-                    <p className="text-white/60 text-sm mb-2">{step.description}</p>
-                    <p className="text-white/40 text-sm">{step.details}</p>
-                  </div>
+                    <h3 className="text-lg font-semibold text-foreground mb-1">{step.title}</h3>
+                    <p className="text-muted-foreground text-sm mb-2">{step.description}</p>
+                    <p className="text-muted-foreground/60 text-sm">{step.details}</p>
+                  </Card>
 
                   {/* Arrow connector (hidden on mobile) */}
                   {!isLast && (
                     <div className="hidden lg:flex absolute -right-4 top-1/2 -translate-y-1/2 z-20">
-                      <div className="w-8 h-8 rounded-full bg-[#0a0a0a] border border-white/10 flex items-center justify-center">
-                        <ArrowRight className="w-4 h-4 text-white/30" />
+                      <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center">
+                        <ArrowRight className="w-4 h-4 text-muted-foreground" />
                       </div>
                     </div>
                   )}
@@ -140,8 +141,8 @@ export function HowItWorks() {
 
         {/* Platform badges */}
         <div className="mt-12 text-center">
-          <p className="text-sm text-white/30 mb-3">Works with</p>
-          <p className="text-sm text-white/50">
+          <p className="text-sm text-muted-foreground/60 mb-3">Works with</p>
+          <p className="text-sm text-muted-foreground">
             Meta Ads · Google Display · TikTok · Pinterest · LinkedIn
           </p>
         </div>

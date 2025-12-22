@@ -30,9 +30,19 @@ import {
   Archive,
   ArchiveRestore,
   ChevronDown,
+  Maximize2,
+  Info,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { detectAspectRatio, AspectRatioKey } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { useUser, SignInButton, UserButton } from '@clerk/nextjs';
@@ -42,7 +52,8 @@ import { LandingPage } from '@/components/landing/LandingPage';
 import { uploadFileToConvex, dataUrlToBlob } from '@/lib/convex-storage';
 import { PlanSelectionModal } from '@/components/PlanSelectionModal';
 
-type Step = 'upload' | 'context' | 'analyzing' | 'editor';
+type Step = 'upload' | 'editor';
+type Tool = 'edit' | 'iterations' | 'export' | null;
 
 interface UploadedImage {
   file: File;
@@ -108,6 +119,7 @@ function HomeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [step, setStep] = useState<Step>('upload');
+  const [selectedTool, setSelectedTool] = useState<Tool>(null);
   const [uploadedImage, setUploadedImage] = useState<UploadedImage | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [variations, setVariations] = useState<Variation[]>([]);
@@ -128,6 +140,7 @@ function HomeContent() {
   const [showPlanSelection, setShowPlanSelection] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [isSuggestingIteration, setIsSuggestingIteration] = useState(false);
+  const [isAnalyzingForIterations, setIsAnalyzingForIterations] = useState(false);
 
   // Get current user's subscription status
   const dbUser = useQuery(api.users.getCurrent);
@@ -278,7 +291,8 @@ function HomeContent() {
         aspectRatio: label,
         aspectRatioKey: key,
       });
-      setStep('context');
+      setStep('editor');
+      setSelectedTool('edit'); // Default to edit tool
     };
 
     img.onerror = () => {
@@ -300,27 +314,22 @@ function HomeContent() {
     disabled: step !== 'upload',
   });
 
-  const handleProceedFromContext = () => {
+  // Generate iterations on-demand (called from the Iterations tool)
+  const handleGenerateIterations = async () => {
     if (!uploadedImage) return;
-    handleAnalyze(uploadedImage.file, uploadedImage.aspectRatio, uploadedImage.aspectRatioKey);
-  };
 
-  const handleAnalyze = async (
-    file: File,
-    aspectRatio: string,
-    aspectRatioKey: AspectRatioKey | 'custom'
-  ) => {
-    setStep('analyzing');
+    setIsAnalyzingForIterations(true);
+    setError(null);
 
     try {
-      const base64 = await fileToBase64(file);
+      const base64 = await fileToBase64(uploadedImage.file);
 
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: base64,
-          mimeType: file.type,
+          mimeType: uploadedImage.file.type,
           additionalContext: additionalContext.trim() || undefined,
         }),
       });
@@ -348,7 +357,7 @@ function HomeContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           analysis: analysisData,
-          aspectRatio,
+          aspectRatio: uploadedImage.aspectRatio,
           additionalContext: additionalContext.trim() || undefined,
         }),
       });
@@ -389,11 +398,11 @@ function HomeContent() {
       }
 
       setVariations(variationsData);
-      setStep('editor');
     } catch (err) {
       console.error('Analysis error:', err);
       setError('Failed to analyze image. Please try again.');
-      setStep('upload');
+    } finally {
+      setIsAnalyzingForIterations(false);
     }
   };
 
@@ -1143,7 +1152,8 @@ function HomeContent() {
               aspectRatio: label,
               aspectRatioKey: key,
             });
-            setStep('context');
+            setStep('editor');
+            setSelectedTool('edit'); // Default to edit tool
           };
 
           img.onerror = () => {
@@ -1161,7 +1171,7 @@ function HomeContent() {
   if (!isUserLoaded) {
     return (
       <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
       </div>
     );
   }
@@ -1220,7 +1230,7 @@ function HomeContent() {
             {...getRootProps()}
             className={`border border-dashed rounded-2xl p-16 text-center cursor-pointer transition-all ${
               isDragActive
-                ? 'border-violet-500 bg-violet-500/10'
+                ? 'border-amber-500 bg-amber-500/10'
                 : 'border-white/20 hover:border-white/40 bg-white/5'
             }`}
           >
@@ -1230,7 +1240,7 @@ function HomeContent() {
                 <Upload className="w-8 h-8 text-white/60" />
               </div>
               {isDragActive ? (
-                <p className="text-violet-400 font-medium text-lg">Drop your ad here...</p>
+                <p className="text-amber-400 font-medium text-lg">Drop your ad here...</p>
               ) : (
                 <>
                   <div>
@@ -1251,110 +1261,177 @@ function HomeContent() {
         </main>
       )}
 
-      {/* Context Step */}
-      {step === 'context' && uploadedImage && (
-        <main className="max-w-3xl mx-auto px-6 py-16">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-8">
-            <div className="flex gap-8">
-              {/* Image preview */}
-              <div className="flex-shrink-0">
-                <img
-                  src={uploadedImage.url}
-                  alt="Uploaded"
-                  className="w-[180px] h-[220px] object-contain rounded-xl border border-white/10 bg-black/20"
-                />
-              </div>
-
-              {/* Context form */}
-              <div className="flex-1">
-                <h2 className="text-xl font-semibold mb-2">Any additional context?</h2>
-                <p className="text-white/50 text-sm mb-4">
-                  Optional details help us create better iterations
-                </p>
-
-                <Textarea
-                  placeholder="e.g., 'Black Friday sale targeting millennials' or 'Emphasize free shipping, playful brand voice'"
-                  value={additionalContext}
-                  onChange={(e) => setAdditionalContext(e.target.value)}
-                  className="w-full bg-white/5 border-white/10 text-white placeholder:text-white/30 min-h-[100px] resize-none mb-4"
-                  rows={4}
-                  autoFocus
-                />
-
-                <div className="flex gap-3">
-                  <Button
-                    variant="ghost"
-                    onClick={handleProceedFromContext}
-                    className="flex-1 text-white/60 hover:text-white border border-white/20 bg-white/5 hover:bg-white/10"
-                  >
-                    Skip
-                  </Button>
-                  <Button
-                    onClick={handleProceedFromContext}
-                    className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500"
-                  >
-                    Continue
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-      )}
-
-      {/* Analyzing State */}
-      {step === 'analyzing' && (
-        <main className="max-w-3xl mx-auto px-6 py-16">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-16 text-center">
-            <Loader2 className="w-12 h-12 text-violet-500 animate-spin mx-auto mb-6" />
-            <h2 className="text-2xl font-semibold mb-2">Analyzing your ad...</h2>
-            <p className="text-white/50">Our AI is understanding your product and style</p>
-            {uploadedImage && (
-              <div className="mt-8 inline-block">
-                <img
-                  src={uploadedImage.url}
-                  alt="Uploaded"
-                  className="max-w-[200px] max-h-[250px] object-contain rounded-xl border border-white/10"
-                />
-              </div>
-            )}
-          </div>
-        </main>
-      )}
-
       {/* Editor State - Main Interface */}
       {step === 'editor' && (
         <main className="h-[calc(100vh-57px)] flex p-6 gap-6">
-          {/* Left Panel - Image Preview */}
-          <div className="w-[40%] flex flex-col">
-            <div className="flex items-center gap-3 mb-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleReset}
-                className="text-white/60 hover:text-white hover:bg-white/10"
-              >
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                New Ad
-              </Button>
-              {isShowingGenerated && selectedVariation && (
-                <span className="text-sm text-white/40">
-                  Viewing: {selectedVariation.title}
-                </span>
-              )}
+          {/* Center Panel - Image Preview */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Horizontal Toolbar - Above Image */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-1 p-1 bg-white/[0.02] border border-white/10 rounded-xl">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setSelectedTool('edit')}
+                      className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                        selectedTool === 'edit'
+                          ? 'bg-amber-600 text-white'
+                          : 'text-white/50 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <Wand2 className="w-4 h-4" />
+                      Edit
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>AI-powered editing & resize</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setSelectedTool('iterations')}
+                      className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                        selectedTool === 'iterations'
+                          ? 'bg-amber-600 text-white'
+                          : 'text-white/50 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Iterations
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Generate variations</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setSelectedTool('export')}
+                      className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                        selectedTool === 'export'
+                          ? 'bg-amber-600 text-white'
+                          : 'text-white/50 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <Download className="w-4 h-4" />
+                      Export
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Download images</TooltipContent>
+                </Tooltip>
+              </div>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleReset}
+                    className="px-3 py-2 rounded-lg flex items-center gap-2 text-white/40 hover:text-white/60 hover:bg-white/5 transition-all text-sm"
+                  >
+                    <X className="w-4 h-4" />
+                    New Ad
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Start over</TooltipContent>
+              </Tooltip>
+            </div>
+
+            {/* Version Control Bar */}
+            <div className="flex items-center gap-3 mb-3 px-1">
+              {/* Original image info with version dots */}
               {!isShowingGenerated && uploadedImage && (
-                <span className="text-sm text-white/40">
-                  Original
-                </span>
+                <div className="flex items-center gap-3">
+                  {/* Original dot with filename */}
+                  <div className="flex items-center gap-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => {
+                            if (originalVersions.length > 0) {
+                              setOriginalVersionIndex(0);
+                            }
+                          }}
+                          className={`w-3 h-3 rounded-full transition-all ${
+                            originalVersionIndex === 0 || originalVersions.length === 0
+                              ? 'bg-emerald-500 scale-110'
+                              : 'bg-white/30 hover:bg-white/50'
+                          }`}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Original: {uploadedImage.filename}
+                      </TooltipContent>
+                    </Tooltip>
+                    <span className="text-sm text-white/50">
+                      {uploadedImage.filename}
+                    </span>
+                  </div>
+
+                  {/* Additional version dots if edited */}
+                  {originalVersions.length > 1 && (
+                    <div className="flex items-center gap-1.5 pl-2 border-l border-white/10">
+                      {originalVersions.slice(1).map((version, idx) => (
+                        <Tooltip key={idx + 1}>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => setOriginalVersionIndex(idx + 1)}
+                              className={`w-2.5 h-2.5 rounded-full transition-all ${
+                                idx + 1 === originalVersionIndex
+                                  ? 'bg-emerald-500 scale-110'
+                                  : 'bg-white/30 hover:bg-white/50'
+                              }`}
+                            />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            v{idx + 2}: "{version.prompt}"
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Generated image version control */}
+              {isShowingGenerated && selectedVariation && (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-white/50">{selectedVariation.title}</span>
+                  {selectedVariation.versions.length > 1 && (
+                    <div className="flex items-center gap-1.5 pl-2 border-l border-white/10">
+                      {selectedVariation.versions.map((version, idx) => (
+                        <Tooltip key={idx}>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => {
+                                setVariations(prev => prev.map(v =>
+                                  v.id === selectedVariation.id
+                                    ? { ...v, currentVersionIndex: idx, hasNewVersion: false }
+                                    : v
+                                ));
+                              }}
+                              className={`w-2.5 h-2.5 rounded-full transition-all ${
+                                idx === selectedVariation.currentVersionIndex
+                                  ? 'bg-amber-500 scale-110'
+                                  : idx === selectedVariation.versions.length - 1 && selectedVariation.hasNewVersion
+                                  ? 'bg-green-500 animate-pulse'
+                                  : 'bg-white/30 hover:bg-white/50'
+                              }`}
+                            />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {version.prompt ? `v${idx + 1}: "${version.prompt}"` : `v${idx + 1}: Original`}
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
-            {/* Controls Section - Above Image */}
-            <div className="space-y-3 mb-4 max-h-[280px] overflow-y-auto">
-              {/* Version navigation and refine for generated images */}
+            {/* Legacy Controls Section - Removed, keeping closing structure */}
+            <div className="hidden">
               {isShowingGenerated && selectedVariation?.status === 'completed' && (
                 <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                  {/* Version indicator and navigation */}
                   {selectedVariation.versions.length > 1 && (
                     <div className="flex items-center justify-between mb-3 pb-3 border-b border-white/10">
                       <div className="flex items-center gap-2">
@@ -1379,7 +1456,7 @@ function HomeContent() {
                                   }}
                                   className={`w-2.5 h-2.5 rounded-full transition-all ${
                                     idx === selectedVariation.currentVersionIndex
-                                      ? 'bg-violet-500 scale-110'
+                                      ? 'bg-amber-500 scale-110'
                                       : idx === selectedVariation.versions.length - 1 && selectedVariation.hasNewVersion
                                       ? 'bg-green-500 animate-pulse'
                                       : 'bg-white/30 hover:bg-white/50'
@@ -1441,7 +1518,7 @@ function HomeContent() {
                       size="sm"
                       onClick={() => requireAuth(() => handleRegenerateWithEdit(selectedVariation.id))}
                       disabled={!selectedVariation.editPrompt.trim() || selectedVariation.isRegenerating}
-                      className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50"
+                      className="bg-amber-600 hover:bg-amber-500 disabled:opacity-50"
                     >
                       {selectedVariation.isRegenerating ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -1471,7 +1548,7 @@ function HomeContent() {
                               await new Promise(resolve => setTimeout(resolve, 300));
                             }
                           }}
-                          className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1"
+                          className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1"
                         >
                           <Download className="w-3 h-3" />
                           Download ({completedCount})
@@ -1484,7 +1561,7 @@ function HomeContent() {
                       onClick={() => setViewingResizedSize(null)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${
                         !viewingResizedSize
-                          ? 'bg-violet-500 text-white'
+                          ? 'bg-amber-500 text-white'
                           : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
                       }`}
                     >
@@ -1510,7 +1587,7 @@ function HomeContent() {
                           }}
                           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${
                             isViewing
-                              ? 'bg-violet-500 text-white'
+                              ? 'bg-amber-500 text-white'
                               : isResizing
                               ? 'bg-white/10 text-white/60 cursor-wait'
                               : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
@@ -1602,7 +1679,7 @@ function HomeContent() {
                       size="sm"
                       onClick={() => requireAuth(handleEditOriginal)}
                       disabled={!originalEditPrompt.trim() || isEditingOriginal}
-                      className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50"
+                      className="bg-amber-600 hover:bg-amber-500 disabled:opacity-50"
                     >
                       {isEditingOriginal ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -1632,7 +1709,7 @@ function HomeContent() {
                               await new Promise(resolve => setTimeout(resolve, 300));
                             }
                           }}
-                          className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1"
+                          className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1"
                         >
                           <Download className="w-3 h-3" />
                           Download ({completedCount})
@@ -1693,15 +1770,70 @@ function HomeContent() {
             </div>
 
             {/* Image Preview */}
-            <div className="flex-1 flex items-center justify-center bg-white/5 rounded-2xl border border-white/10 overflow-hidden relative min-h-0">
+            <div className="flex-1 flex items-center justify-center bg-white/[0.03] rounded-2xl border border-white/10 overflow-hidden relative min-h-0 p-8">
               {previewImage ? (
-                <img
-                  src={previewImage}
-                  alt={isShowingGenerated ? 'Generated variation' : 'Original ad'}
-                  className="max-w-full max-h-full object-contain"
-                />
+                <>
+                  <img
+                    src={previewImage}
+                    alt={isShowingGenerated ? 'Generated variation' : 'Original ad'}
+                    className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                  />
+                  {/* Loading overlay when editing */}
+                  {isEditingOriginal && !isShowingGenerated && (
+                    <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                        <span className="text-sm text-white/70">Applying edit...</span>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="text-white/30">No image</div>
+              )}
+
+              {/* Floating Edit Chat Input - shows when edit tool selected */}
+              {selectedTool === 'edit' && !isShowingGenerated && uploadedImage && (
+                <div className="absolute top-14 left-1/2 -translate-x-1/2 w-full max-w-md px-4">
+                  <div className="bg-black/70 backdrop-blur-md rounded-full border border-white/20 shadow-2xl flex items-center gap-2 pl-4 pr-1.5 py-1.5">
+                    <input
+                      type="text"
+                      placeholder="Describe an edit..."
+                      value={originalEditPrompt}
+                      onChange={(e) => setOriginalEditPrompt(e.target.value)}
+                      className="flex-1 bg-transparent text-sm text-white placeholder:text-white/40 outline-none"
+                      disabled={isEditingOriginal}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && originalEditPrompt.trim() && !isEditingOriginal) {
+                          requireAuth(handleEditOriginal);
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => requireAuth(handleEditOriginal)}
+                      disabled={!originalEditPrompt.trim() || isEditingOriginal}
+                      className="p-2 rounded-full bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isEditingOriginal ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      ) : (
+                        <Send className="w-4 h-4 text-white" />
+                      )}
+                    </button>
+                  </div>
+                  {originalVersions.length > 1 && (
+                    <div className="flex items-center justify-center gap-2 mt-2">
+                      <span className="text-xs text-white/40">v{originalVersionIndex + 1}/{originalVersions.length}</span>
+                      <button
+                        onClick={() => setOriginalVersionIndex(0)}
+                        disabled={originalVersionIndex === 0}
+                        className="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Action buttons overlay */}
@@ -1740,13 +1872,163 @@ function HomeContent() {
             </div>
           </div>
 
-          {/* Right Panel - Variation Cards */}
-          <div className="w-[60%] border border-white/10 rounded-2xl bg-white/[0.02] flex flex-col overflow-hidden">
-            {/* Header */}
-            <div className="p-4 border-b border-white/10">
-              <div className="flex items-center justify-between mb-1">
-                <h2 className="font-semibold">Iterations</h2>
-                <div className="flex items-center gap-3">
+          {/* Right Panel - Tool Panel */}
+          <div className="w-[360px] flex-shrink-0 border border-white/10 rounded-2xl bg-white/[0.02] flex flex-col overflow-hidden">
+            {/* Iterations Tool */}
+            {selectedTool === 'iterations' && (
+              <>
+                {/* Header */}
+                <div className="p-4 border-b border-white/10">
+                  <div className="flex items-center justify-between mb-1">
+                    <h2 className="font-semibold">Iterations</h2>
+                    {variations.length > 0 && (
+                      <div className="flex items-center gap-3">
+                        {completedCount > 0 && (
+                          <button
+                            onClick={() => {
+                              const count = getAllFileCount();
+                              setDownloadModal({
+                                isOpen: true,
+                                title: 'Download All',
+                                fileCount: count,
+                                onConfirm: downloadAllGenerations,
+                              });
+                            }}
+                            className="flex items-center gap-1 text-xs text-white/50 hover:text-white transition-colors"
+                          >
+                            <FolderDown className="w-3.5 h-3.5" />
+                            Download All
+                          </button>
+                        )}
+                        <span className="text-sm text-white/40">
+                          {completedCount}/{variations.length} generated
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Generate Iterations button - show when no variations yet */}
+                  {variations.length === 0 && !isAnalyzingForIterations && (
+                    <div className="mt-2">
+                      <p className="text-sm text-white/50 mb-3">
+                        Generate AI-powered variations of your ad for different contexts and styles.
+                      </p>
+                      <Textarea
+                        placeholder="Optional: Add context like 'Black Friday sale' or 'Target millennials'"
+                        value={additionalContext}
+                        onChange={(e) => setAdditionalContext(e.target.value)}
+                        className="w-full bg-white/5 border-white/10 text-white placeholder:text-white/30 min-h-[60px] resize-none mb-3 text-sm"
+                        rows={2}
+                      />
+                      <Button
+                        onClick={handleGenerateIterations}
+                        className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500"
+                      >
+                        <Sparkles className="w-4 h-4 mr-1.5" />
+                        Generate Iterations
+                      </Button>
+                    </div>
+                  )}
+                  {/* Loading state */}
+                  {isAnalyzingForIterations && (
+                    <div className="mt-4 text-center py-8">
+                      <Loader2 className="w-8 h-8 text-amber-500 animate-spin mx-auto mb-3" />
+                      <p className="text-sm text-white/60">Analyzing your ad...</p>
+                      <p className="text-xs text-white/40 mt-1">Generating variation ideas</p>
+                    </div>
+                  )}
+                  {/* Create all button - show when variations exist but not all generated */}
+                  {variations.length > 0 && generatingCount === 0 && variations.some(v => v.status === 'idle') && (
+                    <Button
+                      size="sm"
+                      onClick={() => requireAuth(handleGenerateAll)}
+                      className="w-full mt-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500"
+                    >
+                      <Sparkles className="w-4 h-4 mr-1.5" />
+                      Create all
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Edit Tool - with resize presets */}
+            {selectedTool === 'edit' && (
+              <div className="p-4 flex flex-col h-full">
+                {/* Current Size */}
+                {uploadedImage && (
+                  <div className="mb-4 p-3 rounded-lg bg-white/5 border border-white/10">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-white/40 uppercase tracking-wide">Current Size</span>
+                      <span className="text-sm font-medium">{uploadedImage.width}×{uploadedImage.height}</span>
+                    </div>
+                    <div className="text-xs text-white/30 mt-1">{uploadedImage.aspectRatio}</div>
+                  </div>
+                )}
+
+                {/* Resize Presets */}
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium mb-2 text-white/70">Resize for Platforms</h3>
+                  <div className="space-y-1.5">
+                    {AD_SIZES.map((size) => {
+                      const resized = originalResizedVersions.find(r => r.size === size.name);
+                      const isResizing = resized?.status === 'resizing';
+                      const isCompleted = resized?.status === 'completed';
+                      return (
+                        <button
+                          key={size.name}
+                          onClick={() => {
+                            if (isCompleted) {
+                              setViewingOriginalResizedSize(size.name);
+                            } else if (!isResizing) {
+                              requireAuth(() => handleResizeOriginal(size));
+                            }
+                          }}
+                          disabled={isResizing}
+                          className={`w-full px-3 py-2 rounded-lg border transition-all text-left flex items-center justify-between text-sm ${
+                            isCompleted
+                              ? 'bg-amber-600/10 border-amber-500/30 hover:bg-amber-600/20'
+                              : 'bg-white/5 border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {isResizing ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-white/50" />
+                            ) : isCompleted ? (
+                              <Check className="w-3.5 h-3.5 text-amber-400" />
+                            ) : (
+                              <Maximize2 className="w-3.5 h-3.5 text-white/30" />
+                            )}
+                            <span className={isCompleted ? 'text-amber-300' : ''}>{size.label}</span>
+                          </div>
+                          <span className="text-white/40 text-xs">{size.width}×{size.height}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Export Tool */}
+            {selectedTool === 'export' && (
+              <div className="p-4">
+                <h2 className="font-semibold mb-2">Export</h2>
+                <p className="text-sm text-white/50 mb-4">
+                  Download your images.
+                </p>
+                <div className="space-y-2">
+                  {uploadedImage && (
+                    <button
+                      onClick={() => handleDownload(uploadedImage.url, uploadedImage.filename)}
+                      className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-left flex items-center gap-3"
+                    >
+                      <Download className="w-4 h-4 text-white/60" />
+                      <div>
+                        <div className="font-medium">Original Image</div>
+                        <div className="text-xs text-white/40">{uploadedImage.filename}</div>
+                      </div>
+                    </button>
+                  )}
                   {completedCount > 0 && (
                     <button
                       onClick={() => {
@@ -1758,33 +2040,32 @@ function HomeContent() {
                           onConfirm: downloadAllGenerations,
                         });
                       }}
-                      className="flex items-center gap-1 text-xs text-white/50 hover:text-white transition-colors"
+                      className="w-full px-4 py-3 rounded-lg bg-amber-600/20 border border-amber-500/30 hover:bg-amber-600/30 transition-all text-left flex items-center gap-3"
                     >
-                      <FolderDown className="w-3.5 h-3.5" />
-                      Download All
+                      <FolderDown className="w-4 h-4 text-amber-400" />
+                      <div>
+                        <div className="font-medium text-amber-300">Download All</div>
+                        <div className="text-xs text-white/40">{completedCount} generated images</div>
+                      </div>
                     </button>
                   )}
-                  <span className="text-sm text-white/40">
-                    {completedCount}/{variations.length} generated
-                  </span>
                 </div>
               </div>
-              {generatingCount === 0 && variations.some(v => v.status === 'idle') && (
-                <Button
-                  size="sm"
-                  onClick={() => requireAuth(handleGenerateAll)}
-                  className="w-full mt-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500"
-                >
-                  <Sparkles className="w-4 h-4 mr-1.5" />
-                  Create all
-                </Button>
-              )}
-            </div>
+            )}
 
-            {/* Variation Cards */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {/* Original Image Card - Always at top */}
-              {uploadedImage && (
+            {/* No tool selected */}
+            {selectedTool === null && (
+              <div className="p-4 flex-1 flex flex-col items-center justify-center text-center">
+                <Info className="w-8 h-8 text-white/20 mb-3" />
+                <p className="text-white/40 text-sm">Select a tool from the sidebar to get started</p>
+              </div>
+            )}
+
+            {/* Variation Cards - Only show for iterations tool */}
+            {selectedTool === 'iterations' && variations.length > 0 && (
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {/* Original Image Card - Always at top */}
+                {uploadedImage && (
                 <div
                   onClick={() => {
                     setSelectedVariationId(null);
@@ -1837,7 +2118,7 @@ function HomeContent() {
                   onClick={() => variation.imageUrl && setSelectedVariationId(variation.id)}
                   className={`rounded-xl border transition-all ${
                     selectedVariationId === variation.id
-                      ? 'border-violet-500 bg-violet-500/10'
+                      ? 'border-amber-500 bg-amber-500/10'
                       : variation.hasNewVersion
                       ? 'border-green-500/50 bg-green-500/5 hover:border-green-500'
                       : 'border-white/10 bg-white/5 hover:border-white/20'
@@ -1848,7 +2129,7 @@ function HomeContent() {
                       {/* Thumbnail */}
                       <div className="w-16 h-20 rounded-lg bg-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center relative">
                         {variation.status === 'generating' ? (
-                          <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
+                          <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />
                         ) : variation.imageUrl ? (
                           <>
                             <img
@@ -1859,7 +2140,7 @@ function HomeContent() {
                             {/* Regenerating overlay */}
                             {variation.isRegenerating && (
                               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />
+                                <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
                               </div>
                             )}
                           </>
@@ -1883,7 +2164,7 @@ function HomeContent() {
                                     key={idx}
                                     className={`w-1.5 h-1.5 rounded-full ${
                                       idx === variation.currentVersionIndex
-                                        ? 'bg-violet-500'
+                                        ? 'bg-amber-500'
                                         : idx === variation.versions.length - 1 && variation.hasNewVersion
                                         ? 'bg-green-500 animate-pulse'
                                         : 'bg-white/30'
@@ -1923,7 +2204,7 @@ function HomeContent() {
                                         e.stopPropagation();
                                         requireAuth(() => handleGenerateSingle(variation.id));
                                       }}
-                                      className="p-1.5 rounded-lg hover:bg-violet-500/20 text-violet-400 hover:text-violet-300 transition-colors"
+                                      className="p-1.5 rounded-lg hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 transition-colors"
                                     >
                                       <Sparkles className="w-3.5 h-3.5" />
                                     </button>
@@ -1968,7 +2249,7 @@ function HomeContent() {
                               </>
                             )}
                             {variation.isRegenerating && (
-                              <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />
+                              <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
                             )}
                           </div>
                         </div>
@@ -2097,7 +2378,7 @@ function HomeContent() {
                   }
                 }}
                 disabled={isSuggestingIteration}
-                className="w-full py-3 rounded-xl border border-dashed border-white/20 hover:border-violet-500/50 hover:bg-violet-500/5 text-white/50 hover:text-violet-400 transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 rounded-xl border border-dashed border-white/20 hover:border-amber-500/50 hover:bg-amber-500/5 text-white/50 hover:text-amber-400 transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSuggestingIteration ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -2115,7 +2396,7 @@ function HomeContent() {
                     <button
                       onClick={handleGeneratePrompt}
                       disabled={isGeneratingPrompt || !analysis}
-                      className="flex items-center gap-1 text-[11px] text-violet-400 hover:text-violet-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isGeneratingPrompt ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -2214,10 +2495,11 @@ function HomeContent() {
                   )}
                 </div>
               )}
-            </div>
+              </div>
+            )}
 
-            {/* Footer */}
-            {user && completedCount > 0 && (
+            {/* Footer - Show for iterations tool */}
+            {selectedTool === 'iterations' && user && completedCount > 0 && (
               <div className="p-4 border-t border-white/10">
                 <Button
                   size="sm"
@@ -2230,7 +2512,7 @@ function HomeContent() {
               </div>
             )}
 
-            {!user && completedCount > 0 && (
+            {selectedTool === 'iterations' && !user && completedCount > 0 && (
               <div className="p-4 border-t border-white/10">
                 <div className="text-center text-sm text-white/40 mb-2">
                   Sign in to save your generations
@@ -2251,41 +2533,31 @@ function HomeContent() {
       )}
 
       {/* Sign Up Prompt Modal */}
-      {showSignUpPrompt && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-lg">Sign up to continue</h3>
-              <button
-                onClick={() => setShowSignUpPrompt(false)}
-                className="p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-white/60 mb-6">
+      <Dialog open={showSignUpPrompt} onOpenChange={setShowSignUpPrompt}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Sign up to continue</DialogTitle>
+            <DialogDescription>
               Create an account to create iterations, edit images, and save your work.
-            </p>
-            <div className="flex gap-3">
-              <Button
-                variant="ghost"
-                onClick={() => setShowSignUpPrompt(false)}
-                className="flex-1 text-white/60 hover:text-white border border-white/20 bg-white/5 hover:bg-white/10"
-              >
-                Cancel
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-row gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowSignUpPrompt(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <SignInButton mode="modal">
+              <Button className="flex-1">
+                <LogIn className="w-4 h-4" />
+                Sign up
               </Button>
-              <SignInButton mode="modal">
-                <Button
-                  className="flex-1 bg-violet-600 hover:bg-violet-500"
-                >
-                  <LogIn className="w-4 h-4 mr-1.5" />
-                  Sign up
-                </Button>
-              </SignInButton>
-            </div>
-          </div>
-        </div>
-      )}
+            </SignInButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Plan Selection Modal */}
       <PlanSelectionModal
@@ -2297,43 +2569,36 @@ function HomeContent() {
       />
 
       {/* Download Confirmation Modal */}
-      {downloadModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-lg">{downloadModal.title}</h3>
-              <button
-                onClick={() => setDownloadModal(null)}
-                className="p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-white/60 mb-6">
-              This will download <span className="text-white font-medium">{downloadModal.fileCount} files</span> to your device.
-            </p>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setDownloadModal(null)}
-                className="flex-1 border-white/10 text-white/60 hover:text-white hover:bg-white/10"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  downloadModal.onConfirm();
-                  setDownloadModal(null);
-                }}
-                className="flex-1 bg-violet-600 hover:bg-violet-500"
-              >
-                <Download className="w-4 h-4 mr-1.5" />
-                Download
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={!!downloadModal} onOpenChange={(open) => !open && setDownloadModal(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{downloadModal?.title}</DialogTitle>
+            <DialogDescription>
+              This will download <span className="text-foreground font-medium">{downloadModal?.fileCount} files</span> to your device.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-row gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setDownloadModal(null)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                downloadModal?.onConfirm();
+                setDownloadModal(null);
+              }}
+              className="flex-1"
+            >
+              <Download className="w-4 h-4" />
+              Download
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
@@ -2354,7 +2619,7 @@ export default function Home() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
       </div>
     }>
       <HomeContent />

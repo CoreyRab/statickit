@@ -1,8 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Check, Loader2 } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 type PlanKey = 'starter' | 'pro' | 'ultra';
 
@@ -98,86 +107,73 @@ export function PlanSelectionModal({ isOpen, onClose }: PlanSelectionModalProps)
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-white/10">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold">Choose your plan</h2>
-              <p className="text-white/50 text-sm mt-1">
-                Select a plan to start creating ad variations
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Choose your plan</DialogTitle>
+          <DialogDescription>
+            Select a plan to start creating ad variations
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid md:grid-cols-3 gap-4 mt-4">
+          {plans.map((plan) => (
+            <Card
+              key={plan.key}
+              className={`relative flex flex-col ${
+                plan.popular
+                  ? 'border-2 border-primary bg-primary/5'
+                  : ''
+              }`}
             >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
+              {plan.popular && (
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  Most Popular
+                </Badge>
+              )}
 
-        <div className="p-6">
-          <div className="grid md:grid-cols-3 gap-4">
-            {plans.map((plan) => (
-              <div
-                key={plan.key}
-                className={`rounded-xl p-5 relative flex flex-col ${
-                  plan.popular
-                    ? 'bg-violet-500/10 border-2 border-violet-500/50'
-                    : 'bg-white/5 border border-white/10'
-                }`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-violet-500 text-white px-3 py-1 rounded-full text-xs font-medium">
-                    Most Popular
-                  </div>
-                )}
-
-                <div className="mb-4">
-                  <h3 className="font-semibold text-lg text-white">{plan.name}</h3>
-                  <p className="text-white/50 text-xs mt-1">{plan.description}</p>
-                  <div className="flex items-baseline gap-1 mt-3">
-                    <span className="text-3xl font-bold text-white">{plan.price}</span>
-                    <span className="text-white/50 text-sm">{plan.period}</span>
-                  </div>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">{plan.name}</CardTitle>
+                <CardDescription className="text-xs">{plan.description}</CardDescription>
+                <div className="flex items-baseline gap-1 pt-2">
+                  <span className="text-3xl font-bold text-foreground">{plan.price}</span>
+                  <span className="text-muted-foreground text-sm">{plan.period}</span>
                 </div>
+              </CardHeader>
 
-                <ul className="space-y-2 flex-1 mb-4">
+              <CardContent className="flex-1 pb-2">
+                <ul className="space-y-2">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2 text-sm text-white/70">
-                      <Check className={`w-4 h-4 flex-shrink-0 ${plan.popular ? 'text-violet-400' : 'text-white/40'}`} />
+                    <li key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Check className={`w-4 h-4 flex-shrink-0 ${plan.popular ? 'text-primary' : 'text-muted-foreground'}`} />
                       <span>{feature}</span>
                     </li>
                   ))}
                 </ul>
+              </CardContent>
 
+              <CardFooter>
                 <Button
                   onClick={() => handleSelectPlan(plan.key)}
                   disabled={loadingPlan !== null}
-                  className={`w-full ${
-                    plan.popular
-                      ? 'bg-violet-500 hover:bg-violet-400 text-white'
-                      : 'bg-white/10 hover:bg-white/20 text-white'
-                  }`}
+                  variant={plan.popular ? 'default' : 'outline'}
+                  className="w-full"
                 >
                   {loadingPlan === plan.key ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      <Loader2 className="w-4 h-4 animate-spin" />
                       Loading...
                     </>
                   ) : (
                     'Select Plan'
                   )}
                 </Button>
-              </div>
-            ))}
-          </div>
+              </CardFooter>
+            </Card>
+          ))}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

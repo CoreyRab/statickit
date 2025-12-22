@@ -13,17 +13,17 @@ const useCases = [
 
 export function UseCases() {
   return (
-    <section className="py-16 px-6 border-t border-white/5">
+    <section className="py-16 px-6 border-t border-border">
       <div className="max-w-4xl mx-auto">
-        <h2 className="text-sm font-medium text-white/40 uppercase tracking-wide mb-8">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-8">
           Use cases
         </h2>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-6">
           {useCases.map((useCase) => (
             <div key={useCase.title}>
-              <h3 className="text-white font-medium mb-1">{useCase.title}</h3>
-              <p className="text-sm text-white/40 leading-relaxed">{useCase.description}</p>
+              <h3 className="text-foreground font-medium mb-1">{useCase.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{useCase.description}</p>
             </div>
           ))}
         </div>
