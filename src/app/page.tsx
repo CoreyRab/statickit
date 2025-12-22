@@ -93,6 +93,7 @@ interface ResizedVersion {
 interface ImageVersion {
   imageUrl: string;
   prompt: string | null; // The edit prompt used to create this version (null for original/first generation)
+  parentIndex: number; // Index of the version this was edited from (-1 for original)
 }
 
 interface Variation {
@@ -141,6 +142,9 @@ function HomeContent() {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [isSuggestingIteration, setIsSuggestingIteration] = useState(false);
   const [isAnalyzingForIterations, setIsAnalyzingForIterations] = useState(false);
+  const [numGenerations, setNumGenerations] = useState(5);
+  const [showCustomIteration, setShowCustomIteration] = useState(false);
+  const [customIterationDescription, setCustomIterationDescription] = useState('');
 
   // Get current user's subscription status
   const dbUser = useQuery(api.users.getCurrent);
@@ -218,7 +222,7 @@ function HomeContent() {
             editPrompt: '',
             isEditingGenerated: false,
             resizedVersions: [],
-            versions: v.image_url ? [{ imageUrl: v.image_url, prompt: null }] : [],
+            versions: v.image_url ? [{ imageUrl: v.image_url, prompt: null, parentIndex: -1 }] : [],
             currentVersionIndex: 0,
             isRegenerating: false,
             hasNewVersion: false,
@@ -359,6 +363,7 @@ function HomeContent() {
           analysis: analysisData,
           aspectRatio: uploadedImage.aspectRatio,
           additionalContext: additionalContext.trim() || undefined,
+          numVariations: numGenerations,
         }),
       });
 
@@ -379,7 +384,7 @@ function HomeContent() {
 
       if (varResponse.ok) {
         const data = await varResponse.json();
-        variationsData = data.variations.slice(0, 4).map((v: any) => ({
+        variationsData = data.variations.slice(0, numGenerations).map((v: any) => ({
           id: uuidv4(),
           title: v.title,
           description: v.description,
@@ -404,6 +409,36 @@ function HomeContent() {
     } finally {
       setIsAnalyzingForIterations(false);
     }
+  };
+
+  // Add a custom iteration
+  const handleAddCustomIteration = () => {
+    if (!customIterationDescription.trim()) return;
+
+    // Auto-generate title from first few words of description
+    const words = customIterationDescription.trim().split(/\s+/);
+    const title = words.slice(0, 3).join(' ') + (words.length > 3 ? '...' : '');
+
+    const newVariation: Variation = {
+      id: uuidv4(),
+      title: title || 'Custom',
+      description: customIterationDescription.trim(),
+      imageUrl: null,
+      status: 'idle',
+      isEditing: false,
+      editPrompt: '',
+      isEditingGenerated: false,
+      resizedVersions: [],
+      versions: [],
+      currentVersionIndex: 0,
+      isRegenerating: false,
+      hasNewVersion: false,
+      isArchived: false,
+    };
+
+    setVariations(prev => [...prev, newVariation]);
+    setCustomIterationDescription('');
+    setShowCustomIteration(false);
   };
 
   const handleGenerateSingle = async (variationId: string) => {
@@ -444,7 +479,7 @@ function HomeContent() {
           ...v,
           status: 'completed',
           imageUrl,
-          versions: [{ imageUrl, prompt: null }], // Store first version (no edit prompt for initial generation)
+          versions: [{ imageUrl, prompt: null, parentIndex: -1 }], // Store first version (no edit prompt for initial generation)
           currentVersionIndex: 0,
         } : v))
       );
@@ -615,7 +650,7 @@ function HomeContent() {
       setVariations(prev =>
         prev.map(v => {
           if (v.id !== variationId) return v;
-          const newVersions: ImageVersion[] = [...v.versions, { imageUrl, prompt: editPromptUsed }];
+          const newVersions: ImageVersion[] = [...v.versions, { imageUrl, prompt: editPromptUsed, parentIndex: v.currentVersionIndex }];
           return {
             ...v,
             isRegenerating: false,
@@ -704,10 +739,10 @@ function HomeContent() {
         } else {
           // Initialize versions array if empty, then add new version
           const currentVersions: ImageVersion[] = originalVersions.length === 0
-            ? [{ imageUrl: uploadedImage.url, prompt: null }]
+            ? [{ imageUrl: uploadedImage.url, prompt: null, parentIndex: -1 }]
             : originalVersions;
 
-          const newVersions: ImageVersion[] = [...currentVersions, { imageUrl: newImageUrl, prompt: editPromptUsed }];
+          const newVersions: ImageVersion[] = [...currentVersions, { imageUrl: newImageUrl, prompt: editPromptUsed, parentIndex: originalVersionIndex }];
           setOriginalVersions(newVersions);
           setOriginalVersionIndex(newVersions.length - 1);
         }
@@ -785,7 +820,7 @@ function HomeContent() {
       editPrompt: '',
       isEditingGenerated: false,
       resizedVersions: [],
-      versions: [{ imageUrl: currentVersionImage, prompt: null }],
+      versions: [{ imageUrl: currentVersionImage, prompt: null, parentIndex: -1 }],
       currentVersionIndex: 0,
       isRegenerating: false,
       hasNewVersion: false,
@@ -1187,6 +1222,17 @@ function HomeContent() {
           </div>
 
           <div className="flex items-center gap-3">
+            {step === 'editor' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleReset}
+                className="text-white/60 hover:text-white hover:bg-white/10"
+              >
+                <Plus className="w-4 h-4 mr-1.5" />
+                Upload
+              </Button>
+            )}
             {user ? (
               <>
                 <Link href="/history">
@@ -1267,7 +1313,7 @@ function HomeContent() {
           {/* Center Panel - Image Preview */}
           <div className="flex-1 flex flex-col min-w-0">
             {/* Horizontal Toolbar - Above Image */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-center mb-4">
               <div className="flex items-center gap-1 p-1 bg-white/[0.02] border border-white/10 rounded-xl">
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1320,23 +1366,10 @@ function HomeContent() {
                   <TooltipContent>Download images</TooltipContent>
                 </Tooltip>
               </div>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={handleReset}
-                    className="px-3 py-2 rounded-lg flex items-center gap-2 text-white/40 hover:text-white/60 hover:bg-white/5 transition-all text-sm"
-                  >
-                    <X className="w-4 h-4" />
-                    New Ad
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Start over</TooltipContent>
-              </Tooltip>
             </div>
 
             {/* Version Control Bar */}
-            <div className="flex items-center gap-3 mb-3 px-1">
+            <div className="flex items-center justify-center gap-3 mb-3 px-1">
               {/* Original image info with version dots */}
               {!isShowingGenerated && uploadedImage && (
                 <div className="flex items-center gap-3">
@@ -1369,23 +1402,35 @@ function HomeContent() {
                   {/* Additional version dots if edited */}
                   {originalVersions.length > 1 && (
                     <div className="flex items-center gap-1.5 pl-2 border-l border-white/10">
-                      {originalVersions.slice(1).map((version, idx) => (
-                        <Tooltip key={idx + 1}>
-                          <TooltipTrigger asChild>
-                            <button
-                              onClick={() => setOriginalVersionIndex(idx + 1)}
-                              className={`w-2.5 h-2.5 rounded-full transition-all ${
-                                idx + 1 === originalVersionIndex
-                                  ? 'bg-emerald-500 scale-110'
-                                  : 'bg-white/30 hover:bg-white/50'
-                              }`}
-                            />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            v{idx + 2}: "{version.prompt}"
-                          </TooltipContent>
-                        </Tooltip>
-                      ))}
+                      {originalVersions.slice(1).map((version, idx) => {
+                        const actualIdx = idx + 1;
+                        const isBranch = version.parentIndex !== actualIdx - 1 && version.parentIndex !== -1;
+                        const isSelected = actualIdx === originalVersionIndex;
+                        return (
+                          <Tooltip key={actualIdx}>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => setOriginalVersionIndex(actualIdx)}
+                                className={`w-2.5 h-2.5 rounded-full transition-all ${
+                                  isSelected
+                                    ? isBranch ? 'bg-violet-500 scale-110' : 'bg-emerald-500 scale-110'
+                                    : isBranch ? 'bg-violet-400/40 hover:bg-violet-400/60' : 'bg-white/30 hover:bg-white/50'
+                                }`}
+                              />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="text-xs">
+                                <div>v{actualIdx + 1}: "{version.prompt}"</div>
+                                {isBranch && (
+                                  <div className="text-violet-300 mt-0.5">
+                                    branched from v{version.parentIndex + 1}
+                                  </div>
+                                )}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1397,31 +1442,43 @@ function HomeContent() {
                   <span className="text-sm text-white/50">{selectedVariation.title}</span>
                   {selectedVariation.versions.length > 1 && (
                     <div className="flex items-center gap-1.5 pl-2 border-l border-white/10">
-                      {selectedVariation.versions.map((version, idx) => (
-                        <Tooltip key={idx}>
-                          <TooltipTrigger asChild>
-                            <button
-                              onClick={() => {
-                                setVariations(prev => prev.map(v =>
-                                  v.id === selectedVariation.id
-                                    ? { ...v, currentVersionIndex: idx, hasNewVersion: false }
-                                    : v
-                                ));
-                              }}
-                              className={`w-2.5 h-2.5 rounded-full transition-all ${
-                                idx === selectedVariation.currentVersionIndex
-                                  ? 'bg-amber-500 scale-110'
-                                  : idx === selectedVariation.versions.length - 1 && selectedVariation.hasNewVersion
-                                  ? 'bg-green-500 animate-pulse'
-                                  : 'bg-white/30 hover:bg-white/50'
-                              }`}
-                            />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {version.prompt ? `v${idx + 1}: "${version.prompt}"` : `v${idx + 1}: Original`}
-                          </TooltipContent>
-                        </Tooltip>
-                      ))}
+                      {selectedVariation.versions.map((version, idx) => {
+                        const isBranch = idx > 0 && version.parentIndex !== idx - 1 && version.parentIndex !== -1;
+                        const isSelected = idx === selectedVariation.currentVersionIndex;
+                        const isNewVersion = idx === selectedVariation.versions.length - 1 && selectedVariation.hasNewVersion;
+                        return (
+                          <Tooltip key={idx}>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => {
+                                  setVariations(prev => prev.map(v =>
+                                    v.id === selectedVariation.id
+                                      ? { ...v, currentVersionIndex: idx, hasNewVersion: false }
+                                      : v
+                                  ));
+                                }}
+                                className={`w-2.5 h-2.5 rounded-full transition-all ${
+                                  isSelected
+                                    ? isBranch ? 'bg-violet-500 scale-110' : 'bg-amber-500 scale-110'
+                                    : isNewVersion
+                                    ? 'bg-green-500 animate-pulse'
+                                    : isBranch ? 'bg-violet-400/40 hover:bg-violet-400/60' : 'bg-white/30 hover:bg-white/50'
+                                }`}
+                              />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="text-xs">
+                                <div>{version.prompt ? `v${idx + 1}: "${version.prompt}"` : `v${idx + 1}: Original`}</div>
+                                {isBranch && (
+                                  <div className="text-violet-300 mt-0.5">
+                                    branched from v{version.parentIndex + 1}
+                                  </div>
+                                )}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1598,7 +1655,15 @@ function HomeContent() {
                             <Loader2 className="w-3 h-3 animate-spin" />
                           ) : isCompleted ? (
                             <Check className="w-3 h-3" />
-                          ) : null}
+                          ) : (
+                            <div
+                              className="bg-white/20 border border-white/30 rounded-[2px]"
+                              style={{
+                                width: size.width >= size.height ? 12 : 12 * (size.width / size.height),
+                                height: size.height >= size.width ? 12 : 12 * (size.height / size.width),
+                              }}
+                            />
+                          )}
                           <span>{size.name}</span>
                           <span className="text-white/40">{size.label}</span>
                         </button>
@@ -1758,7 +1823,15 @@ function HomeContent() {
                             <Loader2 className="w-3 h-3 animate-spin" />
                           ) : isCompleted ? (
                             <Check className="w-3 h-3" />
-                          ) : null}
+                          ) : (
+                            <div
+                              className="bg-white/20 border border-white/30 rounded-[2px]"
+                              style={{
+                                width: size.width >= size.height ? 12 : 12 * (size.width / size.height),
+                                height: size.height >= size.width ? 12 : 12 * (size.height / size.width),
+                              }}
+                            />
+                          )}
                           <span>{size.name}</span>
                           <span className="text-white/40">{size.label}</span>
                         </button>
@@ -1912,20 +1985,93 @@ function HomeContent() {
                       <p className="text-sm text-white/50 mb-3">
                         Generate AI-powered variations of your ad for different contexts and styles.
                       </p>
-                      <Textarea
-                        placeholder="Optional: Add context like 'Black Friday sale' or 'Target millennials'"
-                        value={additionalContext}
-                        onChange={(e) => setAdditionalContext(e.target.value)}
-                        className="w-full bg-white/5 border-white/10 text-white placeholder:text-white/30 min-h-[60px] resize-none mb-3 text-sm"
-                        rows={2}
-                      />
+
+                      {/* Number of generations */}
+                      <div className="mb-3">
+                        <label className="text-xs text-white/40 mb-1.5 block">Number of suggestions</label>
+                        <div className="flex items-center gap-2">
+                          {[3, 5, 8, 10].map((num) => (
+                            <button
+                              key={num}
+                              onClick={() => setNumGenerations(num)}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                                numGenerations === num
+                                  ? 'bg-amber-600 text-white'
+                                  : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70'
+                              }`}
+                            >
+                              {num}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Context input */}
+                      <div className="mb-3">
+                        <label className="text-xs text-white/40 mb-1.5 block">
+                          Optional: Add additional context to guide the suggestions
+                        </label>
+                        <Textarea
+                          placeholder="Add context like 'Black Friday sale' or 'Target millennials'"
+                          value={additionalContext}
+                          onChange={(e) => setAdditionalContext(e.target.value)}
+                          className="w-full bg-white/5 border-white/10 text-white placeholder:text-white/30 min-h-[60px] resize-none text-sm"
+                          rows={2}
+                        />
+                      </div>
+
                       <Button
                         onClick={handleGenerateIterations}
                         className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500"
                       >
                         <Sparkles className="w-4 h-4 mr-1.5" />
-                        Generate Iterations
+                        Generate suggestions
                       </Button>
+
+                      {/* Custom iteration section */}
+                      <div className="mt-4 pt-4 border-t border-white/10">
+                        {!showCustomIteration ? (
+                          <button
+                            onClick={() => setShowCustomIteration(true)}
+                            className="w-full px-3 py-2.5 rounded-lg border border-dashed border-white/20 text-white/50 hover:text-white/70 hover:border-white/30 transition-all flex items-center justify-center gap-2 text-sm"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Custom iteration
+                          </button>
+                        ) : (
+                          <div className="space-y-3">
+                            <Textarea
+                              placeholder="Describe the iteration you want to create..."
+                              value={customIterationDescription}
+                              onChange={(e) => setCustomIterationDescription(e.target.value)}
+                              className="w-full bg-white/5 border-white/10 text-white placeholder:text-white/30 min-h-[80px] resize-none text-sm"
+                              rows={3}
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={handleAddCustomIteration}
+                                disabled={!customIterationDescription.trim()}
+                                size="sm"
+                                className="flex-1 bg-white/10 hover:bg-white/20 text-white"
+                              >
+                                <Plus className="w-3.5 h-3.5 mr-1" />
+                                Add iteration
+                              </Button>
+                              <Button
+                                onClick={() => {
+                                  setShowCustomIteration(false);
+                                  setCustomIterationDescription('');
+                                }}
+                                size="sm"
+                                variant="ghost"
+                                className="text-white/50 hover:text-white hover:bg-white/10"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                   {/* Loading state */}
@@ -1990,17 +2136,23 @@ function HomeContent() {
                               : 'bg-white/5 border-white/10 hover:bg-white/10'
                           }`}
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2.5">
                             {isResizing ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin text-white/50" />
                             ) : isCompleted ? (
                               <Check className="w-3.5 h-3.5 text-amber-400" />
                             ) : (
-                              <Maximize2 className="w-3.5 h-3.5 text-white/30" />
+                              <div
+                                className="bg-white/20 border border-white/30 rounded-[2px]"
+                                style={{
+                                  width: size.width >= size.height ? 14 : 14 * (size.width / size.height),
+                                  height: size.height >= size.width ? 14 : 14 * (size.height / size.width),
+                                }}
+                              />
                             )}
                             <span className={isCompleted ? 'text-amber-300' : ''}>{size.label}</span>
                           </div>
-                          <span className="text-white/40 text-xs">{size.width}×{size.height}</span>
+                          <span className="text-white/40 text-xs">{size.name}</span>
                         </button>
                       );
                     })}

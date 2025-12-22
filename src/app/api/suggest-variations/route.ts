@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response;
     }
 
-    const { analysis, aspectRatio, additionalContext } = await request.json();
+    const { analysis, aspectRatio, additionalContext, numVariations = 5 } = await request.json();
 
     if (!analysis) {
       return NextResponse.json(
@@ -29,6 +29,10 @@ export async function POST(request: NextRequest) {
     }
 
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    // Calculate split: ~75% location iterations, ~25% person iterations
+    const locationCount = Math.ceil(numVariations * 0.75);
+    const personCount = numVariations - locationCount;
 
     const prompt = `You are an expert advertising creative director. Your job is to suggest ITERATIONS of a winning ad.
 
@@ -49,12 +53,12 @@ ORIGINAL AD ANALYSIS:
 - Current Mood: ${analysis.mood}
 ${additionalContext ? `\nADDITIONAL CONTEXT FROM ADVERTISER:\n${additionalContext}\n\nIMPORTANT: Use this context to tailor iterations to the specific campaign goals and target audience.` : ''}
 
-GENERATE 4 ITERATIONS:
+GENERATE ${numVariations} ITERATIONS:
 
-**LOCATION ITERATIONS** (3 iterations)
+**LOCATION ITERATIONS** (${locationCount} iterations)
 Same ad, new backdrop. The location must be VISUALLY DISTINCT.
 
-Based on the product and current setting, suggest 3 alternative locations that:
+Based on the product and current setting, suggest ${locationCount} alternative locations that:
 1. Make sense for where someone would actually use this product
 2. Are VISUALLY DIFFERENT from each other (not just slight variations)
 3. Appeal to different lifestyle contexts within the target audience
@@ -64,8 +68,8 @@ GOOD: Clearly different environments that tell different stories
 
 Think about WHERE the target audience uses this product and suggest realistic, contextual locations.
 
-**PERSON ITERATION** (1 iteration)
-If there's a person in the ad, suggest a different model to reach new audience segments.
+**PERSON ITERATION** (${personCount} iteration${personCount > 1 ? 's' : ''})
+If there's a person in the ad, suggest ${personCount > 1 ? 'different models' : 'a different model'} to reach new audience segments.
 
 Test:
 - Different ethnicities
@@ -81,7 +85,7 @@ CRITICAL RULES:
 3. Each iteration changes ONE variable only
 4. Iterations must be VISUALLY DIFFERENT enough that the audience can tell them apart
 
-Return a JSON array with exactly 4 iterations:
+Return a JSON array with exactly ${numVariations} iterations:
 [
   {
     "title": "Short descriptive title (2-4 words)",

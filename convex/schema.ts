@@ -2,6 +2,13 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  // Waitlist for coming soon page
+  waitlist: defineTable({
+    email: v.string(),
+    createdAt: v.number(), // Unix timestamp
+    source: v.optional(v.string()), // Where they signed up from
+  }).index("by_email", ["email"]),
+
   // Users table for credits and subscription tracking
   users: defineTable({
     clerkId: v.string(), // Clerk user ID
