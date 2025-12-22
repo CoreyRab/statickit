@@ -162,6 +162,89 @@ function HomeContent() {
   const [originalVersions, setOriginalVersions] = useState<ImageVersion[]>([]);
   const [originalVersionIndex, setOriginalVersionIndex] = useState(0);
   const [originalResizedVersions, setOriginalResizedVersions] = useState<ResizedVersion[]>([]);
+
+  // Presets state
+  const [selectedPresets, setSelectedPresets] = useState<{
+    lighting: string | null;
+    style: string | null;
+    camera: string | null;
+    mood: string | null;
+    color: string | null;
+    era: string | null;
+    background: string | null;
+    hardware: string | null;
+  }>({ lighting: null, style: null, camera: null, mood: null, color: null, era: null, background: null, hardware: null });
+  const [expandedPresetCategory, setExpandedPresetCategory] = useState<string | null>(null);
+  const [isApplyingPreset, setIsApplyingPreset] = useState(false);
+
+  // Presets data - prompts optimized for AI image editing
+  const PRESETS = {
+    lighting: [
+      { id: 'golden-hour', name: 'Golden Hour', prompt: 'Transform the lighting to golden hour: warm color temperature around 3000K, soft amber and orange tones, long directional shadows, sun low on the horizon creating a warm magical glow on the subject, maintain all other elements exactly as they are' },
+      { id: 'studio', name: 'Studio', prompt: 'Transform the lighting to professional studio setup: three-point lighting with key light, fill light, and rim light, soft shadows, neutral 5500K color temperature, even illumination across the subject, clean commercial photography look, maintain all other elements exactly as they are' },
+      { id: 'natural', name: 'Natural', prompt: 'Transform the lighting to natural window light: soft diffused daylight at 5500-6500K color temperature, gentle shadows, as if photographed near a large north-facing window, airy and fresh feeling, maintain all other elements exactly as they are' },
+      { id: 'dramatic', name: 'Dramatic', prompt: 'Transform the lighting to dramatic Rembrandt style: strong directional single light source, high contrast ratio, deep rich shadows, chiaroscuro effect, moody and intense atmosphere, cinematic shadow play, maintain all other elements exactly as they are' },
+      { id: 'backlit', name: 'Backlit', prompt: 'Transform the lighting to backlit/rim lit: strong light source behind the subject creating glowing edges and rim highlights, subtle lens flare, subject slightly silhouetted with luminous outline, ethereal halo effect, maintain all other elements exactly as they are' },
+      { id: 'soft-box', name: 'Soft Box', prompt: 'Transform the lighting to large soft box beauty lighting: very soft wrap-around illumination, minimal shadows, even skin tones, high-end advertising photography look, flattering diffused light from large source, maintain all other elements exactly as they are' },
+    ],
+    style: [
+      { id: 'photorealistic', name: 'Photorealistic', prompt: 'Enhance to ultra photorealistic quality: sharp fine details, realistic material textures, natural micro-imperfections, proper specular highlights, accurate light falloff, shot on high-end full-frame camera, maintain all subjects and composition exactly as they are' },
+      { id: 'cinematic', name: 'Cinematic', prompt: 'Apply cinematic film look: teal and orange color grading, lifted blacks, slightly desaturated midtones, anamorphic lens characteristics, subtle film grain, 2.39:1 widescreen atmosphere, Hollywood movie color science, maintain all subjects and composition exactly as they are' },
+      { id: 'editorial', name: 'Editorial', prompt: 'Apply high-end editorial magazine style: polished and refined, perfect color balance, sophisticated color palette, Vogue/Harper\'s Bazaar aesthetic, crisp professional retouching, fashion-forward look, maintain all subjects and composition exactly as they are' },
+      { id: 'film-grain', name: 'Film Grain', prompt: 'Apply analog 35mm film aesthetic: visible film grain texture like Kodak Portra 400, slightly lifted blacks, gentle color fade, subtle halation on highlights, nostalgic vintage film photography look, maintain all subjects and composition exactly as they are' },
+      { id: 'minimalist', name: 'Minimalist', prompt: 'Apply minimalist aesthetic: simplify and clean the background, increase negative space, reduce visual clutter, focus attention on the main subject, clean lines, Scandinavian design sensibility, maintain the main subject exactly as it is' },
+      { id: 'hdr', name: 'HDR', prompt: 'Apply HDR tone mapping effect: enhanced dynamic range, recovered shadow details, controlled highlights, slightly boosted saturation, visible detail in all tonal ranges, punchy vibrant look, maintain all subjects and composition exactly as they are' },
+    ],
+    camera: [
+      { id: 'shallow-dof', name: 'Shallow DOF', prompt: 'Apply shallow depth of field effect: simulate f/1.4 aperture, creamy smooth bokeh in background, circular out-of-focus highlights, subject tack-sharp, professional portrait-style background separation, maintain the subject exactly as it is' },
+      { id: 'wide-angle', name: 'Wide Angle', prompt: 'Apply wide angle lens perspective: simulate 16-24mm focal length, expanded field of view, subtle barrel distortion at edges, exaggerated perspective with closer objects appearing larger, dramatic sense of space, maintain the subject exactly as it is' },
+      { id: 'macro', name: 'Macro', prompt: 'Apply macro lens close-up effect: extreme fine detail visibility, simulate 1:1 magnification ratio, very shallow plane of focus, visible surface textures and micro-details, scientific precision, maintain the subject exactly as it is' },
+      { id: 'portrait-85mm', name: 'Portrait 85mm', prompt: 'Apply 85mm portrait lens look: flattering facial compression, smooth creamy background bokeh at f/1.8, classic portrait photography perspective, beautiful subject-background separation, maintain the subject exactly as it is' },
+      { id: 'tilt-shift', name: 'Tilt Shift', prompt: 'Apply tilt-shift miniature effect: selective focus plane at an angle, blur at top and bottom of frame, scene appears like a tiny diorama or model, toy-like surreal appearance, maintain the subject in the focused area exactly as it is' },
+      { id: 'birds-eye', name: "Bird's Eye", prompt: 'Apply bird\'s eye overhead perspective: viewing angle directly from above at 90 degrees, flat lay composition style, looking straight down at the subject, top-down view, maintain the subject exactly as it is' },
+    ],
+    mood: [
+      { id: 'cinematic-moody', name: 'Cinematic Moody', prompt: 'Apply cinematic moody aesthetic: deep shadows with crushed blacks, desaturated midtones, high contrast ratio, dramatic shadow play, intense emotional atmosphere, film-like color grading with teal shadows and warm highlights, maintain all subjects exactly as they are' },
+      { id: 'hyper-realistic', name: 'Hyper-Realistic', prompt: 'Enhance to hyper-realistic quality: maximum clarity and sharpness, meticulous fine details visible, subtle interplay of light and shadow, ultra high-resolution appearance, lifelike textures and materials, cinematic lighting precision, maintain all subjects exactly as they are' },
+      { id: 'light-dreamy', name: 'Light & Dreamy', prompt: 'Apply light and dreamy aesthetic: soft diffused glow, slightly overexposed highlights, gentle pastel color shift, ethereal and airy atmosphere, romantic soft-focus quality, lifted shadows with creamy tones, maintain all subjects exactly as they are' },
+      { id: 'high-contrast', name: 'High Contrast', prompt: 'Apply bold high contrast look: strong tonal differences between lights and darks, punchy blacks and bright whites, dramatic visual impact, attention-grabbing intensity, fashion/advertising style contrast, maintain all subjects exactly as they are' },
+      { id: 'soft-natural', name: 'Soft & Natural', prompt: 'Apply authentic natural editing: true-to-life colors, minimal processing appearance, honest and relatable aesthetic, subtle enhancement only, real skin textures preserved, timeless and genuine feel, maintain all subjects exactly as they are' },
+      { id: 'dark-dramatic', name: 'Dark & Dramatic', prompt: 'Apply dark dramatic mood: low-key lighting effect, rich deep shadows, mysterious atmosphere, luxurious and sophisticated feel, moody intensity with controlled highlights, high-end dark aesthetic, maintain all subjects exactly as they are' },
+    ],
+    color: [
+      { id: 'warm-cozy', name: 'Warm & Cozy', prompt: 'Apply warm cozy color grading: amber and orange tones throughout, increased color temperature to 4000K warmth, brown and earth tone enhancement, inviting and comfortable atmosphere, autumn/hygge feeling, maintain all subjects exactly as they are' },
+      { id: 'cool-modern', name: 'Cool & Modern', prompt: 'Apply cool modern color grading: blue and teal color shift, decreased color temperature for crisp cool tones, contemporary sleek feeling, tech-forward aesthetic, clean and professional coolness, maintain all subjects exactly as they are' },
+      { id: 'vibrant-bold', name: 'Vibrant & Bold', prompt: 'Apply vibrant bold colors: highly saturated punchy tones, increased vibrancy across all colors, energetic and exciting color palette, attention-grabbing saturation, maintain all subjects exactly as they are' },
+      { id: 'muted-soft', name: 'Muted & Soft', prompt: 'Apply muted soft color palette: desaturated gentle tones, soft pastel color shift, understated elegance, luxury brand aesthetic, calm and sophisticated feel, reduced color intensity, maintain all subjects exactly as they are' },
+      { id: 'dark-luxurious', name: 'Dark & Luxurious', prompt: 'Apply dark luxurious color grading: deep rich shadows, jewel tone colors, sophisticated dark palette, premium high-end feel, moody luxury aesthetic with controlled saturation, maintain all subjects exactly as they are' },
+      { id: 'bright-airy', name: 'Bright & Airy', prompt: 'Apply bright airy aesthetic: lifted exposure, light and fresh feeling, soft whites, clean bright tones, open and spacious atmosphere, instagram-style light aesthetic, maintain all subjects exactly as they are' },
+    ],
+    era: [
+      { id: 'film-analog', name: 'Film Analog', prompt: 'Apply authentic film analog look: visible organic film grain, Kodak Portra or Fuji color science, slightly lifted blacks, soft highlight rolloff, gentle color fade, true analog photography aesthetic, maintain all subjects exactly as they are' },
+      { id: '70s-retro', name: '70s Retro', prompt: 'Apply 1970s retro aesthetic: warm earth tones, orange and brown color cast, soft vintage focus, faded shadows, nostalgic warmth, analog film characteristics of the era, groovy vintage feeling, maintain all subjects exactly as they are' },
+      { id: '90s-faded', name: '90s Faded', prompt: 'Apply 1990s faded aesthetic: slightly desaturated colors, authentic grunge-era tones, subtle green/yellow color cast, matte finish, indie film look, VHS-influenced color palette, raw and authentic feel, maintain all subjects exactly as they are' },
+      { id: 'y2k-glossy', name: 'Y2K Glossy', prompt: 'Apply Y2K glossy aesthetic: high shine and gloss effect, pink and blue color tints, futuristic retro feeling, playful early 2000s vibe, slight overexposure, Gen-Z nostalgia aesthetic, maintain all subjects exactly as they are' },
+      { id: 'vintage-sepia', name: 'Vintage Sepia', prompt: 'Apply vintage sepia toning: classic brown/amber monochromatic tint, antique photograph feeling, timeless nostalgic warmth, aged photo aesthetic, historical photography look, elegant vintage finish, maintain all subjects exactly as they are' },
+      { id: 'modern-clean', name: 'Modern Clean', prompt: 'Apply modern clean aesthetic: true-to-color accuracy, crisp and contemporary, neutral color balance, timeless professional look, minimal color grading, honest representation with subtle polish, maintain all subjects exactly as they are' },
+    ],
+    background: [
+      { id: 'blur-bg', name: 'Blur Background', prompt: 'Increase background blur: apply stronger gaussian blur to background areas only, enhance depth separation, creamy out-of-focus background, keep main subject perfectly sharp and in focus, professional portrait-style background separation, maintain the subject exactly as it is' },
+      { id: 'brighten-bg', name: 'Brighten Background', prompt: 'Brighten the background: increase exposure and brightness of background areas, create clean airy feeling, high-key background effect, make subject pop against lighter backdrop, maintain the subject exactly as it is with original exposure' },
+      { id: 'darken-bg', name: 'Darken Background', prompt: 'Darken the background: decrease exposure of background areas, add subtle vignette effect, create dramatic subject emphasis, low-key backdrop for focus, rich dark surroundings, maintain the subject exactly as it is with original exposure' },
+      { id: 'clean-white', name: 'Clean White', prompt: 'Transform to clean white background: pure white seamless backdrop, professional ecommerce/product photography style, high-key studio look, remove all background distractions, Amazon/catalog style clean presentation, maintain the subject exactly as it is' },
+      { id: 'simplify-scene', name: 'Simplify Scene', prompt: 'Simplify the background scene: reduce visual clutter and distracting elements, declutter surroundings, create cleaner composition, remove unnecessary background objects, focus attention on main subject, maintain the subject exactly as it is' },
+      { id: 'gradient-fade', name: 'Gradient Fade', prompt: 'Apply gradient background fade: smooth gradient transition in background, editorial magazine style backdrop, modern gradient effect from dark to light or complementary colors, sophisticated contemporary look, maintain the subject exactly as it is' },
+    ],
+    hardware: [
+      { id: 'hasselblad', name: 'Hasselblad X2D', prompt: 'Apply Hasselblad medium format camera look: exceptional detail and resolution, medium format sensor rendering, smooth tonal transitions, Hasselblad Natural Color Solution color science, ultra-fine detail in highlights and shadows, studio-quality commercial photography aesthetic, maintain all subjects exactly as they are' },
+      { id: 'canon-r5', name: 'Canon EOS R5', prompt: 'Apply Canon EOS R5 camera look: Canon color science with warm pleasing skin tones, excellent dynamic range, vibrant but natural colors, professional full-frame rendering, flagship Canon image quality, maintain all subjects exactly as they are' },
+      { id: 'sony-a7rv', name: 'Sony a7R V', prompt: 'Apply Sony a7R V camera look: ultra high resolution detail, Sony color science with accurate true-to-life colors, exceptional sharpness and clarity, professional mirrorless quality, precise highlight and shadow detail, maintain all subjects exactly as they are' },
+      { id: 'nikon-z8', name: 'Nikon Z8', prompt: 'Apply Nikon Z8 camera look: Nikon color science with rich natural tones, excellent skin tone rendering, professional-grade image quality, balanced contrast, versatile all-rounder aesthetic, maintain all subjects exactly as they are' },
+      { id: 'film-35mm', name: '35mm Film Camera', prompt: 'Apply vintage 35mm film camera look: authentic analog film grain, classic SLR camera rendering, Kodak or Fuji film emulation, mechanical camera aesthetic, nostalgic film photography look with natural imperfections, soft organic detail, maintain all subjects exactly as they are' },
+      { id: 'polaroid', name: 'Polaroid Instant', prompt: 'Apply Polaroid instant camera look: characteristic Polaroid color cast, slightly faded and washed out tones, soft dreamy focus, instant film texture, vintage instant photography aesthetic, white border framing feel, nostalgic lo-fi charm, maintain all subjects exactly as they are' },
+      { id: 'security-cam', name: 'Security Camera', prompt: 'Apply security camera / Ring doorbell look: lower resolution appearance, slight wide-angle distortion, surveillance camera aesthetic, timestamp overlay style, infrared night-vision green tint option, grainy compressed video still quality, utilitarian lo-fi look, maintain all subjects exactly as they are' },
+    ],
+  };
   const [viewingOriginalResizedSize, setViewingOriginalResizedSize] = useState<string | null>(null);
 
   const { user, isLoaded: isUserLoaded } = useUser();
@@ -183,6 +266,52 @@ function HomeContent() {
       setWeirdnessLevel(parseInt(savedWeirdness));
     }
   }, []);
+
+  // Keyboard navigation for version control (left/right arrow keys)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      const selectedVariation = variations.find(v => v.id === selectedVariationId);
+      const isShowingGenerated = selectedVariation && selectedVariation.imageUrl;
+
+      if (e.key === 'ArrowLeft') {
+        if (isShowingGenerated && selectedVariation.versions.length > 1) {
+          // Navigate generated image versions
+          if (selectedVariation.currentVersionIndex > 0) {
+            setVariations(prev => prev.map(v =>
+              v.id === selectedVariationId
+                ? { ...v, currentVersionIndex: v.currentVersionIndex - 1, hasNewVersion: false }
+                : v
+            ));
+          }
+        } else if (!isShowingGenerated && originalVersions.length > 1 && originalVersionIndex > 0) {
+          // Navigate original image versions
+          setOriginalVersionIndex(prev => prev - 1);
+        }
+      } else if (e.key === 'ArrowRight') {
+        if (isShowingGenerated && selectedVariation.versions.length > 1) {
+          // Navigate generated image versions
+          if (selectedVariation.currentVersionIndex < selectedVariation.versions.length - 1) {
+            setVariations(prev => prev.map(v =>
+              v.id === selectedVariationId
+                ? { ...v, currentVersionIndex: v.currentVersionIndex + 1, hasNewVersion: false }
+                : v
+            ));
+          }
+        } else if (!isShowingGenerated && originalVersions.length > 1 && originalVersionIndex < originalVersions.length - 1) {
+          // Navigate original image versions
+          setOriginalVersionIndex(prev => prev + 1);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedVariationId, variations, originalVersions, originalVersionIndex]);
 
   // Load session from history page (resume functionality)
   useEffect(() => {
@@ -764,6 +893,108 @@ function HomeContent() {
       console.error('Original edit error:', err);
     } finally {
       setIsEditingOriginal(false);
+    }
+  };
+
+  // Apply presets to the current image
+  const handleApplyPresets = async () => {
+    if (!uploadedImage) return;
+
+    // Build combined prompt from selected presets
+    const prompts: string[] = [];
+    const presetNames: string[] = [];
+
+    // Helper to add preset if selected
+    const addPreset = (category: keyof typeof PRESETS, selected: string | null) => {
+      if (selected) {
+        const preset = PRESETS[category].find(p => p.id === selected);
+        if (preset) {
+          prompts.push(preset.prompt);
+          presetNames.push(preset.name);
+        }
+      }
+    };
+
+    addPreset('lighting', selectedPresets.lighting);
+    addPreset('style', selectedPresets.style);
+    addPreset('camera', selectedPresets.camera);
+    addPreset('mood', selectedPresets.mood);
+    addPreset('color', selectedPresets.color);
+    addPreset('era', selectedPresets.era);
+    addPreset('background', selectedPresets.background);
+    addPreset('hardware', selectedPresets.hardware);
+
+    if (prompts.length === 0) return;
+
+    setIsApplyingPreset(true);
+
+    try {
+      // Get current image to edit
+      const currentImageUrl = originalVersions.length > 0
+        ? originalVersions[originalVersionIndex].imageUrl
+        : uploadedImage.url;
+
+      // Convert to base64
+      let imageToEdit: string;
+      if (currentImageUrl.startsWith('data:')) {
+        imageToEdit = currentImageUrl.split(',')[1];
+      } else {
+        const base64 = await fileToBase64(uploadedImage.file);
+        imageToEdit = base64;
+      }
+
+      // Build preset label for the version history
+      const presetLabel = presetNames.filter(Boolean).join(' + ') + ' [preset]';
+
+      const combinedPrompt = prompts.join('. ');
+
+      const analysisToUse = analysis || {
+        product: 'Image',
+        brand_style: 'Not specified',
+        visual_elements: [],
+        key_selling_points: [],
+        target_audience: 'General',
+        colors: [],
+        mood: 'Not specified',
+      };
+
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: imageToEdit,
+          mimeType: uploadedImage.file.type,
+          analysis: analysisToUse,
+          variationDescription: `PRESET APPLICATION: ${combinedPrompt}`,
+          aspectRatio: uploadedImage.aspectRatio,
+          isEdit: true,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newImageUrl = data.imageUrl;
+
+        // Initialize versions array if empty, then add new version
+        const currentVersions: ImageVersion[] = originalVersions.length === 0
+          ? [{ imageUrl: uploadedImage.url, prompt: null, parentIndex: -1 }]
+          : originalVersions;
+
+        const newVersions: ImageVersion[] = [...currentVersions, {
+          imageUrl: newImageUrl,
+          prompt: presetLabel,
+          parentIndex: originalVersionIndex
+        }];
+        setOriginalVersions(newVersions);
+        setOriginalVersionIndex(newVersions.length - 1);
+
+        // Clear selections after successful apply
+        setSelectedPresets({ lighting: null, style: null, camera: null, mood: null, color: null, era: null, background: null, hardware: null });
+      }
+    } catch (err) {
+      console.error('Preset apply error:', err);
+    } finally {
+      setIsApplyingPreset(false);
     }
   };
 
@@ -1354,7 +1585,7 @@ function HomeContent() {
                       }`}
                     >
                       <Sparkles className="w-4 h-4" />
-                      Iterations
+                      Iterate
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>Generate variations</TooltipContent>
@@ -1380,119 +1611,93 @@ function HomeContent() {
             </div>
 
             {/* Version Control Bar */}
-            <div className="flex items-center justify-center gap-3 mb-3 px-1">
-              {/* Original image info with version dots */}
+            <div className="flex flex-col items-center gap-1.5 mb-3">
+              {/* Original image versions */}
               {!isShowingGenerated && uploadedImage && (
-                <div className="flex items-center gap-3">
-                  {/* Original dot with filename */}
-                  <div className="flex items-center gap-2">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={() => {
-                            if (originalVersions.length > 0) {
-                              setOriginalVersionIndex(0);
-                            }
-                          }}
-                          className={`w-3 h-3 rounded-full transition-all ${
-                            originalVersionIndex === 0 || originalVersions.length === 0
-                              ? 'bg-emerald-500 scale-110'
-                              : 'bg-white/30 hover:bg-white/50'
-                          }`}
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Original: {uploadedImage.filename}
-                      </TooltipContent>
-                    </Tooltip>
-                    <span className="text-sm text-white/50">
-                      {uploadedImage.filename}
-                    </span>
+                <>
+                  {/* Dots row - fixed position */}
+                  <div className="flex items-center justify-center gap-2">
+                    {/* Always show dot for original */}
+                    {originalVersions.length === 0 && (
+                      <button
+                        className="w-2.5 h-2.5 rounded-full transition-all bg-emerald-500 scale-110"
+                      />
+                    )}
+                    {originalVersions.map((version, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setOriginalVersionIndex(idx)}
+                        className={`w-2.5 h-2.5 rounded-full transition-all ${
+                          idx === originalVersionIndex
+                            ? 'bg-emerald-500 scale-110'
+                            : 'bg-white/30 hover:bg-white/50'
+                        }`}
+                      />
+                    ))}
+                    {(isEditingOriginal || isApplyingPreset) && (
+                      <Loader2 className="w-2.5 h-2.5 text-white/50 animate-spin" />
+                    )}
                   </div>
-
-                  {/* Additional version dots if edited */}
-                  {originalVersions.length > 1 && (
-                    <div className="flex items-center gap-1.5 pl-2 border-l border-white/10">
-                      {originalVersions.slice(1).map((version, idx) => {
-                        const actualIdx = idx + 1;
-                        const isBranch = version.parentIndex !== actualIdx - 1 && version.parentIndex !== -1;
-                        const isSelected = actualIdx === originalVersionIndex;
-                        return (
-                          <Tooltip key={actualIdx}>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={() => setOriginalVersionIndex(actualIdx)}
-                                className={`w-2.5 h-2.5 rounded-full transition-all ${
-                                  isSelected
-                                    ? isBranch ? 'bg-violet-500 scale-110' : 'bg-emerald-500 scale-110'
-                                    : isBranch ? 'bg-violet-400/40 hover:bg-violet-400/60' : 'bg-white/30 hover:bg-white/50'
-                                }`}
-                              />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <div className="text-xs">
-                                <div>v{actualIdx + 1}: "{version.prompt}"</div>
-                                {isBranch && (
-                                  <div className="text-violet-300 mt-0.5">
-                                    branched from v{version.parentIndex + 1}
-                                  </div>
-                                )}
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                  {/* Label row - changes but dots stay fixed */}
+                  <span className="text-xs text-white/50 text-center">
+                    {originalVersions.length > 0 && originalVersions[originalVersionIndex]?.prompt ? (
+                      originalVersions[originalVersionIndex].prompt.includes('[preset]') ? (
+                        <span>
+                          <span className="text-amber-400">[preset]</span>
+                          <span className="italic text-white/60"> {originalVersions[originalVersionIndex].prompt.replace(' [preset]', '')}</span>
+                        </span>
+                      ) : (
+                        <span className="italic text-white/60">"{originalVersions[originalVersionIndex].prompt}"</span>
+                      )
+                    ) : (
+                      uploadedImage.filename
+                    )}
+                  </span>
+                </>
               )}
 
-              {/* Generated image version control */}
-              {isShowingGenerated && selectedVariation && (
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-white/50">{selectedVariation.title}</span>
-                  {selectedVariation.versions.length > 1 && (
-                    <div className="flex items-center gap-1.5 pl-2 border-l border-white/10">
-                      {selectedVariation.versions.map((version, idx) => {
-                        const isBranch = idx > 0 && version.parentIndex !== idx - 1 && version.parentIndex !== -1;
-                        const isSelected = idx === selectedVariation.currentVersionIndex;
-                        const isNewVersion = idx === selectedVariation.versions.length - 1 && selectedVariation.hasNewVersion;
-                        return (
-                          <Tooltip key={idx}>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={() => {
-                                  setVariations(prev => prev.map(v =>
-                                    v.id === selectedVariation.id
-                                      ? { ...v, currentVersionIndex: idx, hasNewVersion: false }
-                                      : v
-                                  ));
-                                }}
-                                className={`w-2.5 h-2.5 rounded-full transition-all ${
-                                  isSelected
-                                    ? isBranch ? 'bg-violet-500 scale-110' : 'bg-amber-500 scale-110'
-                                    : isNewVersion
-                                    ? 'bg-green-500 animate-pulse'
-                                    : isBranch ? 'bg-violet-400/40 hover:bg-violet-400/60' : 'bg-white/30 hover:bg-white/50'
-                                }`}
-                              />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <div className="text-xs">
-                                <div>{version.prompt ? `v${idx + 1}: "${version.prompt}"` : `v${idx + 1}: Original`}</div>
-                                {isBranch && (
-                                  <div className="text-violet-300 mt-0.5">
-                                    branched from v{version.parentIndex + 1}
-                                  </div>
-                                )}
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+              {/* Generated image versions */}
+              {isShowingGenerated && selectedVariation && selectedVariation.versions.length > 0 && (
+                <>
+                  {/* Dots row - fixed position */}
+                  <div className="flex items-center justify-center gap-2">
+                    {selectedVariation.versions.map((version, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setVariations(prev => prev.map(v =>
+                            v.id === selectedVariation.id
+                              ? { ...v, currentVersionIndex: idx, hasNewVersion: false }
+                              : v
+                          ));
+                        }}
+                        className={`w-2.5 h-2.5 rounded-full transition-all ${
+                          idx === selectedVariation.currentVersionIndex
+                            ? 'bg-emerald-500 scale-110'
+                            : 'bg-white/30 hover:bg-white/50'
+                        }`}
+                      />
+                    ))}
+                    {selectedVariation.isRegenerating && (
+                      <Loader2 className="w-2.5 h-2.5 text-white/50 animate-spin" />
+                    )}
+                  </div>
+                  {/* Label row */}
+                  <span className="text-xs text-white/50 text-center">
+                    {selectedVariation.versions[selectedVariation.currentVersionIndex]?.prompt ? (
+                      selectedVariation.versions[selectedVariation.currentVersionIndex].prompt.includes('[preset]') ? (
+                        <span>
+                          <span className="text-amber-400">[preset]</span>
+                          <span className="italic text-white/60"> {selectedVariation.versions[selectedVariation.currentVersionIndex].prompt.replace(' [preset]', '')}</span>
+                        </span>
+                      ) : (
+                        <span className="italic text-white/60">"{selectedVariation.versions[selectedVariation.currentVersionIndex].prompt}"</span>
+                      )
+                    ) : (
+                      selectedVariation.title
+                    )}
+                  </span>
+                </>
               )}
             </div>
 
@@ -1602,7 +1807,7 @@ function HomeContent() {
               {isShowingGenerated && selectedVariation?.status === 'completed' && (
                 <div className="p-4 rounded-xl bg-white/5 border border-white/10">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-medium text-white/70">Resize for platforms</p>
+                    <p className="text-sm font-medium text-white/70">Smart resize</p>
                     {(() => {
                       const completedCount = selectedVariation.resizedVersions.filter(r => r.status === 'completed').length + 1;
                       return completedCount > 1 ? (
@@ -1771,7 +1976,7 @@ function HomeContent() {
               {!isShowingGenerated && uploadedImage && (
                 <div className="p-4 rounded-xl bg-white/5 border border-white/10">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-medium text-white/70">Resize for platforms</p>
+                    <p className="text-sm font-medium text-white/70">Smart resize</p>
                     {(() => {
                       const completedCount = originalResizedVersions.filter(r => r.status === 'completed').length + 1;
                       return completedCount > 1 ? (
@@ -1855,13 +2060,29 @@ function HomeContent() {
 
             {/* Image Preview */}
             <div className="flex-1 flex items-center justify-center bg-white/[0.03] rounded-2xl border border-white/10 overflow-hidden relative min-h-0 p-8">
-              {previewImage ? (
+              {previewImage && uploadedImage ? (
                 <>
-                  <img
-                    src={previewImage}
-                    alt={isShowingGenerated ? 'Generated variation' : 'Original ad'}
-                    className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                  />
+                  {/*
+                    Container sized to original image's aspect ratio.
+                    Uses CSS to calculate max size that fits container while preserving aspect ratio.
+                    All versions (original + edits) display at this same size for easy comparison.
+                  */}
+                  <div
+                    className="relative rounded-lg shadow-2xl overflow-hidden"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      maxWidth: `min(100%, calc((100vh - 200px) * ${uploadedImage.width / uploadedImage.height}))`,
+                      maxHeight: `min(100%, calc(100vw * ${uploadedImage.height / uploadedImage.width}))`,
+                      aspectRatio: `${uploadedImage.width} / ${uploadedImage.height}`,
+                    }}
+                  >
+                    <img
+                      src={previewImage}
+                      alt={isShowingGenerated ? 'Generated variation' : 'Original ad'}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  </div>
                   {/* Loading overlay when editing */}
                   {isEditingOriginal && !isShowingGenerated && (
                     <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center">
@@ -1905,18 +2126,6 @@ function HomeContent() {
                       )}
                     </button>
                   </div>
-                  {originalVersions.length > 1 && (
-                    <div className="flex items-center justify-center gap-2 mt-2">
-                      <span className="text-xs text-white/40">v{originalVersionIndex + 1}/{originalVersions.length}</span>
-                      <button
-                        onClick={() => setOriginalVersionIndex(0)}
-                        disabled={originalVersionIndex === 0}
-                        className="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        Reset
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1958,13 +2167,13 @@ function HomeContent() {
 
           {/* Right Panel - Tool Panel */}
           <div className="w-[360px] flex-shrink-0 border border-white/10 rounded-2xl bg-white/[0.02] flex flex-col overflow-hidden">
-            {/* Iterations Tool */}
+            {/* Iterate Tool */}
             {selectedTool === 'iterations' && (
               <>
                 {/* Header */}
                 <div className="p-4 border-b border-white/10">
                   <div className="flex items-center justify-between mb-1">
-                    <h2 className="font-semibold">Iterations</h2>
+                    <h2 className="font-semibold">Iterate</h2>
                     {variations.length > 0 && (
                       <div className="flex items-center gap-3">
                         {completedCount > 0 && (
@@ -2122,9 +2331,356 @@ function HomeContent() {
                   </div>
                 )}
 
-                {/* Resize Presets */}
-                <div className="flex-1">
-                  <h3 className="text-sm font-medium mb-2 text-white/70">Resize for Platforms</h3>
+                {/* Presets */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  <h3 className="text-sm font-medium mb-2 text-white/70">Presets</h3>
+                  <div className="flex-1 overflow-y-auto space-y-2">
+                    {/* Lighting */}
+                    <div className="rounded-lg border border-white/10 overflow-hidden">
+                      <button
+                        onClick={() => setExpandedPresetCategory(expandedPresetCategory === 'lighting' ? null : 'lighting')}
+                        className="w-full px-3 py-2 flex items-center justify-between text-sm bg-white/5 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>💡</span>
+                          <span>Lighting</span>
+                          {selectedPresets.lighting && (
+                            <span className="text-xs text-amber-400 ml-1">
+                              ({PRESETS.lighting.find(p => p.id === selectedPresets.lighting)?.name})
+                            </span>
+                          )}
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-white/50 transition-transform ${expandedPresetCategory === 'lighting' ? 'rotate-180' : ''}`} />
+                      </button>
+                      {expandedPresetCategory === 'lighting' && (
+                        <div className="p-2 space-y-1 bg-black/20">
+                          {PRESETS.lighting.map((preset) => (
+                            <button
+                              key={preset.id}
+                              onClick={() => setSelectedPresets(prev => ({
+                                ...prev,
+                                lighting: prev.lighting === preset.id ? null : preset.id
+                              }))}
+                              className={`w-full px-3 py-1.5 rounded text-left text-sm transition-all ${
+                                selectedPresets.lighting === preset.id
+                                  ? 'bg-amber-600/30 text-amber-300'
+                                  : 'hover:bg-white/10 text-white/70'
+                              }`}
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Style */}
+                    <div className="rounded-lg border border-white/10 overflow-hidden">
+                      <button
+                        onClick={() => setExpandedPresetCategory(expandedPresetCategory === 'style' ? null : 'style')}
+                        className="w-full px-3 py-2 flex items-center justify-between text-sm bg-white/5 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>🎨</span>
+                          <span>Style</span>
+                          {selectedPresets.style && (
+                            <span className="text-xs text-amber-400 ml-1">
+                              ({PRESETS.style.find(p => p.id === selectedPresets.style)?.name})
+                            </span>
+                          )}
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-white/50 transition-transform ${expandedPresetCategory === 'style' ? 'rotate-180' : ''}`} />
+                      </button>
+                      {expandedPresetCategory === 'style' && (
+                        <div className="p-2 space-y-1 bg-black/20">
+                          {PRESETS.style.map((preset) => (
+                            <button
+                              key={preset.id}
+                              onClick={() => setSelectedPresets(prev => ({
+                                ...prev,
+                                style: prev.style === preset.id ? null : preset.id
+                              }))}
+                              className={`w-full px-3 py-1.5 rounded text-left text-sm transition-all ${
+                                selectedPresets.style === preset.id
+                                  ? 'bg-amber-600/30 text-amber-300'
+                                  : 'hover:bg-white/10 text-white/70'
+                              }`}
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Camera */}
+                    <div className="rounded-lg border border-white/10 overflow-hidden">
+                      <button
+                        onClick={() => setExpandedPresetCategory(expandedPresetCategory === 'camera' ? null : 'camera')}
+                        className="w-full px-3 py-2 flex items-center justify-between text-sm bg-white/5 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>📷</span>
+                          <span>Camera</span>
+                          {selectedPresets.camera && (
+                            <span className="text-xs text-amber-400 ml-1">
+                              ({PRESETS.camera.find(p => p.id === selectedPresets.camera)?.name})
+                            </span>
+                          )}
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-white/50 transition-transform ${expandedPresetCategory === 'camera' ? 'rotate-180' : ''}`} />
+                      </button>
+                      {expandedPresetCategory === 'camera' && (
+                        <div className="p-2 space-y-1 bg-black/20">
+                          {PRESETS.camera.map((preset) => (
+                            <button
+                              key={preset.id}
+                              onClick={() => setSelectedPresets(prev => ({
+                                ...prev,
+                                camera: prev.camera === preset.id ? null : preset.id
+                              }))}
+                              className={`w-full px-3 py-1.5 rounded text-left text-sm transition-all ${
+                                selectedPresets.camera === preset.id
+                                  ? 'bg-amber-600/30 text-amber-300'
+                                  : 'hover:bg-white/10 text-white/70'
+                              }`}
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Mood */}
+                    <div className="rounded-lg border border-white/10 overflow-hidden">
+                      <button
+                        onClick={() => setExpandedPresetCategory(expandedPresetCategory === 'mood' ? null : 'mood')}
+                        className="w-full px-3 py-2 flex items-center justify-between text-sm bg-white/5 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>✨</span>
+                          <span>Mood</span>
+                          {selectedPresets.mood && (
+                            <span className="text-xs text-amber-400 ml-1">
+                              ({PRESETS.mood.find(p => p.id === selectedPresets.mood)?.name})
+                            </span>
+                          )}
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-white/50 transition-transform ${expandedPresetCategory === 'mood' ? 'rotate-180' : ''}`} />
+                      </button>
+                      {expandedPresetCategory === 'mood' && (
+                        <div className="p-2 space-y-1 bg-black/20">
+                          {PRESETS.mood.map((preset) => (
+                            <button
+                              key={preset.id}
+                              onClick={() => setSelectedPresets(prev => ({
+                                ...prev,
+                                mood: prev.mood === preset.id ? null : preset.id
+                              }))}
+                              className={`w-full px-3 py-1.5 rounded text-left text-sm transition-all ${
+                                selectedPresets.mood === preset.id
+                                  ? 'bg-amber-600/30 text-amber-300'
+                                  : 'hover:bg-white/10 text-white/70'
+                              }`}
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Color */}
+                    <div className="rounded-lg border border-white/10 overflow-hidden">
+                      <button
+                        onClick={() => setExpandedPresetCategory(expandedPresetCategory === 'color' ? null : 'color')}
+                        className="w-full px-3 py-2 flex items-center justify-between text-sm bg-white/5 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>🎨</span>
+                          <span>Color</span>
+                          {selectedPresets.color && (
+                            <span className="text-xs text-amber-400 ml-1">
+                              ({PRESETS.color.find(p => p.id === selectedPresets.color)?.name})
+                            </span>
+                          )}
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-white/50 transition-transform ${expandedPresetCategory === 'color' ? 'rotate-180' : ''}`} />
+                      </button>
+                      {expandedPresetCategory === 'color' && (
+                        <div className="p-2 space-y-1 bg-black/20">
+                          {PRESETS.color.map((preset) => (
+                            <button
+                              key={preset.id}
+                              onClick={() => setSelectedPresets(prev => ({
+                                ...prev,
+                                color: prev.color === preset.id ? null : preset.id
+                              }))}
+                              className={`w-full px-3 py-1.5 rounded text-left text-sm transition-all ${
+                                selectedPresets.color === preset.id
+                                  ? 'bg-amber-600/30 text-amber-300'
+                                  : 'hover:bg-white/10 text-white/70'
+                              }`}
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Era */}
+                    <div className="rounded-lg border border-white/10 overflow-hidden">
+                      <button
+                        onClick={() => setExpandedPresetCategory(expandedPresetCategory === 'era' ? null : 'era')}
+                        className="w-full px-3 py-2 flex items-center justify-between text-sm bg-white/5 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>📼</span>
+                          <span>Era</span>
+                          {selectedPresets.era && (
+                            <span className="text-xs text-amber-400 ml-1">
+                              ({PRESETS.era.find(p => p.id === selectedPresets.era)?.name})
+                            </span>
+                          )}
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-white/50 transition-transform ${expandedPresetCategory === 'era' ? 'rotate-180' : ''}`} />
+                      </button>
+                      {expandedPresetCategory === 'era' && (
+                        <div className="p-2 space-y-1 bg-black/20">
+                          {PRESETS.era.map((preset) => (
+                            <button
+                              key={preset.id}
+                              onClick={() => setSelectedPresets(prev => ({
+                                ...prev,
+                                era: prev.era === preset.id ? null : preset.id
+                              }))}
+                              className={`w-full px-3 py-1.5 rounded text-left text-sm transition-all ${
+                                selectedPresets.era === preset.id
+                                  ? 'bg-amber-600/30 text-amber-300'
+                                  : 'hover:bg-white/10 text-white/70'
+                              }`}
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Background */}
+                    <div className="rounded-lg border border-white/10 overflow-hidden">
+                      <button
+                        onClick={() => setExpandedPresetCategory(expandedPresetCategory === 'background' ? null : 'background')}
+                        className="w-full px-3 py-2 flex items-center justify-between text-sm bg-white/5 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>🖼️</span>
+                          <span>Background</span>
+                          {selectedPresets.background && (
+                            <span className="text-xs text-amber-400 ml-1">
+                              ({PRESETS.background.find(p => p.id === selectedPresets.background)?.name})
+                            </span>
+                          )}
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-white/50 transition-transform ${expandedPresetCategory === 'background' ? 'rotate-180' : ''}`} />
+                      </button>
+                      {expandedPresetCategory === 'background' && (
+                        <div className="p-2 space-y-1 bg-black/20">
+                          {PRESETS.background.map((preset) => (
+                            <button
+                              key={preset.id}
+                              onClick={() => setSelectedPresets(prev => ({
+                                ...prev,
+                                background: prev.background === preset.id ? null : preset.id
+                              }))}
+                              className={`w-full px-3 py-1.5 rounded text-left text-sm transition-all ${
+                                selectedPresets.background === preset.id
+                                  ? 'bg-amber-600/30 text-amber-300'
+                                  : 'hover:bg-white/10 text-white/70'
+                              }`}
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Hardware */}
+                    <div className="rounded-lg border border-white/10 overflow-hidden">
+                      <button
+                        onClick={() => setExpandedPresetCategory(expandedPresetCategory === 'hardware' ? null : 'hardware')}
+                        className="w-full px-3 py-2 flex items-center justify-between text-sm bg-white/5 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>📸</span>
+                          <span>Hardware</span>
+                          {selectedPresets.hardware && (
+                            <span className="text-xs text-amber-400 ml-1">
+                              ({PRESETS.hardware.find(p => p.id === selectedPresets.hardware)?.name})
+                            </span>
+                          )}
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-white/50 transition-transform ${expandedPresetCategory === 'hardware' ? 'rotate-180' : ''}`} />
+                      </button>
+                      {expandedPresetCategory === 'hardware' && (
+                        <div className="p-2 space-y-1 bg-black/20">
+                          {PRESETS.hardware.map((preset) => (
+                            <button
+                              key={preset.id}
+                              onClick={() => setSelectedPresets(prev => ({
+                                ...prev,
+                                hardware: prev.hardware === preset.id ? null : preset.id
+                              }))}
+                              className={`w-full px-3 py-1.5 rounded text-left text-sm transition-all ${
+                                selectedPresets.hardware === preset.id
+                                  ? 'bg-amber-600/30 text-amber-300'
+                                  : 'hover:bg-white/10 text-white/70'
+                              }`}
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Apply button */}
+                  {(selectedPresets.lighting || selectedPresets.style || selectedPresets.camera || selectedPresets.mood || selectedPresets.color || selectedPresets.era || selectedPresets.background || selectedPresets.hardware) && (
+                    <div className="mt-3 pt-3 border-t border-white/10">
+                      <Button
+                        onClick={() => requireAuth(handleApplyPresets)}
+                        disabled={isApplyingPreset}
+                        className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500"
+                      >
+                        {isApplyingPreset ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Applying...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="w-4 h-4 mr-2" />
+                            Apply Preset
+                          </>
+                        )}
+                      </Button>
+                      <button
+                        onClick={() => setSelectedPresets({ lighting: null, style: null, camera: null, mood: null, color: null, era: null, background: null, hardware: null })}
+                        className="w-full mt-2 text-xs text-white/40 hover:text-white/60 transition-colors"
+                      >
+                        Clear selections
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Smart Resize */}
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium mb-2 text-white/70">Smart resize</h3>
                   <div className="space-y-1.5">
                     {AD_SIZES.map((size) => {
                       const resized = originalResizedVersions.find(r => r.size === size.name);
