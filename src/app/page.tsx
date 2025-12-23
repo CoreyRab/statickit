@@ -169,6 +169,7 @@ function HomeContent() {
   // Debug: log user info
   console.log('dbUser:', dbUser, 'isAdmin:', isAdmin, 'hasSubscription:', hasSubscription, 'hasApiKey:', hasApiKey);
   const [showArchived, setShowArchived] = useState(false);
+  const [showCustomVariationInput, setShowCustomVariationInput] = useState(false);
 
   // Original image editing state
   const [originalEditPrompt, setOriginalEditPrompt] = useState('');
@@ -303,7 +304,23 @@ function HomeContent() {
       const selectedVariation = variations.find(v => v.id === selectedVariationId);
       const isShowingGenerated = selectedVariation && selectedVariation.imageUrl;
 
-      if (e.key === 'ArrowLeft') {
+      if (e.shiftKey && e.key === 'ArrowLeft') {
+        // Shift + Left = Previous tool
+        const tools: Tool[] = ['iterations', 'edit', 'backgrounds', 'export'];
+        setSelectedTool(prev => {
+          if (prev === null) return 'export'; // Start from end
+          const currentIndex = tools.indexOf(prev);
+          return currentIndex <= 0 ? null : tools[currentIndex - 1];
+        });
+      } else if (e.shiftKey && e.key === 'ArrowRight') {
+        // Shift + Right = Next tool
+        const tools: Tool[] = ['iterations', 'edit', 'backgrounds', 'export'];
+        setSelectedTool(prev => {
+          if (prev === null) return 'iterations'; // Start from beginning
+          const currentIndex = tools.indexOf(prev);
+          return currentIndex >= tools.length - 1 ? null : tools[currentIndex + 1];
+        });
+      } else if (e.key === 'ArrowLeft') {
         if (isShowingGenerated && selectedVariation.versions.length > 1) {
           // Navigate generated image versions
           if (selectedVariation.currentVersionIndex > 0) {
@@ -330,6 +347,16 @@ function HomeContent() {
         } else if (!isShowingGenerated && originalVersions.length > 1 && originalVersionIndex < originalVersions.length - 1) {
           // Navigate original image versions
           setOriginalVersionIndex(prev => prev + 1);
+        }
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        // Delete current edit (not original, not variations)
+        if (!isShowingGenerated && originalVersionIndex > 0 && originalVersions.length > 1) {
+          const currentVersion = originalVersions[originalVersionIndex];
+          if (currentVersion?.status !== 'processing') {
+            // Delete the version and go to previous
+            setOriginalVersions(prev => prev.filter((_, idx) => idx !== originalVersionIndex));
+            setOriginalVersionIndex(Math.max(0, originalVersionIndex - 1));
+          }
         }
       }
     };
@@ -1387,10 +1414,10 @@ function HomeContent() {
 
   // Resize original image
   const handleResizeOriginal = async (size: typeof AD_SIZES[number]) => {
-    if (!uploadedImage || !analysis) return;
+    if (!uploadedImage) return;
 
     // Get the current image to resize (either original or edited version)
-    const currentImageUrl = originalVersions.length > 0
+    const currentImageUrl = originalVersions.length > 0 && originalVersions[originalVersionIndex]?.imageUrl
       ? originalVersions[originalVersionIndex].imageUrl
       : uploadedImage.url;
 
@@ -1437,6 +1464,9 @@ function HomeContent() {
           targetWidth: size.width,
           targetHeight: size.height,
           targetRatio: size.name,
+          // Send original dimensions so API can determine extend vs crop strategy
+          originalWidth: uploadedImage.width,
+          originalHeight: uploadedImage.height,
           analysis,
         }),
       });
@@ -1514,6 +1544,19 @@ function HomeContent() {
     // Switch to viewing original (non-generated) to show the new version
     setIsShowingGenerated(false);
     setSelectedVariationId(null);
+  };
+
+  // Delete the current version and navigate to the previous one
+  const handleDeleteVersion = () => {
+    if (originalVersionIndex === 0 || originalVersions.length <= 1) return;
+
+    setOriginalVersions(prev => {
+      const newVersions = prev.filter((_, idx) => idx !== originalVersionIndex);
+      return newVersions;
+    });
+
+    // Navigate to previous version
+    setOriginalVersionIndex(Math.max(0, originalVersionIndex - 1));
   };
 
   // Count files for a single variation (all versions + all resizes)
@@ -1826,73 +1869,53 @@ function HomeContent() {
             {/* Horizontal Toolbar - Above Image */}
             <div className="flex items-center justify-center mb-4">
               <div className="flex items-center gap-1 p-1 bg-white/[0.02] border border-white/10 rounded-xl">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => setSelectedTool('iterations')}
-                      className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
-                        selectedTool === 'iterations'
-                          ? 'bg-amber-600 text-white'
-                          : 'text-white/50 hover:text-white hover:bg-white/10'
-                      }`}
-                    >
-                      <Layers className="w-4 h-4" />
-                      Versions
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Generate variations</TooltipContent>
-                </Tooltip>
+                <button
+                  onClick={() => setSelectedTool('iterations')}
+                  className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                    selectedTool === 'iterations'
+                      ? 'bg-amber-600 text-white'
+                      : 'text-white/50 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <Layers className="w-4 h-4" />
+                  Versions
+                </button>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => setSelectedTool('edit')}
-                      className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
-                        selectedTool === 'edit'
-                          ? 'bg-amber-600 text-white'
-                          : 'text-white/50 hover:text-white hover:bg-white/10'
-                      }`}
-                    >
-                      <Wand2 className="w-4 h-4" />
-                      Edit
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>AI-powered editing & resize</TooltipContent>
-                </Tooltip>
+                <button
+                  onClick={() => setSelectedTool('edit')}
+                  className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                    selectedTool === 'edit'
+                      ? 'bg-amber-600 text-white'
+                      : 'text-white/50 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <Wand2 className="w-4 h-4" />
+                  Edit
+                </button>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => setSelectedTool('backgrounds')}
-                      className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
-                        selectedTool === 'backgrounds'
-                          ? 'bg-amber-600 text-white'
-                          : 'text-white/50 hover:text-white hover:bg-white/10'
-                      }`}
-                    >
-                      <ImageIcon className="w-4 h-4" />
-                      Backgrounds
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Change background only</TooltipContent>
-                </Tooltip>
+                <button
+                  onClick={() => setSelectedTool('backgrounds')}
+                  className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                    selectedTool === 'backgrounds'
+                      ? 'bg-amber-600 text-white'
+                      : 'text-white/50 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  Backgrounds
+                </button>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => setSelectedTool('export')}
-                      className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
-                        selectedTool === 'export'
-                          ? 'bg-amber-600 text-white'
-                          : 'text-white/50 hover:text-white hover:bg-white/10'
-                      }`}
-                    >
-                      <Download className="w-4 h-4" />
-                      Export
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Download images</TooltipContent>
-                </Tooltip>
+                <button
+                  onClick={() => setSelectedTool('export')}
+                  className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                    selectedTool === 'export'
+                      ? 'bg-amber-600 text-white'
+                      : 'text-white/50 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <Download className="w-4 h-4" />
+                  Export
+                </button>
               </div>
             </div>
 
@@ -2101,91 +2124,6 @@ function HomeContent() {
                 </div>
               )}
 
-              {/* Resize for generated images */}
-              {isShowingGenerated && selectedVariation?.status === 'completed' && (
-                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-medium text-white/70">Smart resize</p>
-                    {(() => {
-                      const completedCount = selectedVariation.resizedVersions.filter(r => r.status === 'completed').length + 1;
-                      return completedCount > 1 ? (
-                        <button
-                          onClick={async () => {
-                            if (selectedVariation.imageUrl) {
-                              await handleDownload(selectedVariation.imageUrl, `${selectedVariation.title}_original.png`);
-                            }
-                            for (const resized of selectedVariation.resizedVersions.filter(r => r.status === 'completed' && r.imageUrl)) {
-                              await handleDownload(resized.imageUrl!, `${selectedVariation.title}_${resized.size}.png`);
-                              await new Promise(resolve => setTimeout(resolve, 300));
-                            }
-                          }}
-                          className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1"
-                        >
-                          <Download className="w-3 h-3" />
-                          Download ({completedCount})
-                        </button>
-                      ) : null;
-                    })()}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setViewingResizedSize(null)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${
-                        !viewingResizedSize
-                          ? 'bg-amber-500 text-white'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
-                      }`}
-                    >
-                      <Check className="w-3 h-3" />
-                      <span>{uploadedImage ? `${uploadedImage.width}x${uploadedImage.height}` : 'Original'}</span>
-                      <span className="text-white/40">Uploaded</span>
-                    </button>
-                    {AD_SIZES.map((size) => {
-                      const resized = selectedVariation.resizedVersions.find(r => r.size === size.name);
-                      const isResizing = resized?.status === 'resizing';
-                      const isCompleted = resized?.status === 'completed';
-                      const isViewing = viewingResizedSize === size.name;
-                      return (
-                        <button
-                          key={size.name}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isCompleted) {
-                              setViewingResizedSize(size.name);
-                            } else if (!isResizing) {
-                              requireAuth(() => handleResizeImage(selectedVariation.id, size));
-                            }
-                          }}
-                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${
-                            isViewing
-                              ? 'bg-amber-500 text-white'
-                              : isResizing
-                              ? 'bg-white/10 text-white/60 cursor-wait'
-                              : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
-                          }`}
-                          disabled={isResizing}
-                        >
-                          {isResizing ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : isCompleted ? (
-                            <Check className="w-3 h-3" />
-                          ) : (
-                            <div
-                              className="bg-white/20 border border-white/30 rounded-[2px]"
-                              style={{
-                                width: size.width >= size.height ? 12 : 12 * (size.width / size.height),
-                                height: size.height >= size.width ? 12 : 12 * (size.height / size.width),
-                              }}
-                            />
-                          )}
-                          <span>{size.name}</span>
-                          <span className="text-white/40">{size.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
               {/* Edit controls for original image */}
               {!isShowingGenerated && uploadedImage && (
@@ -2273,90 +2211,6 @@ function HomeContent() {
                 </div>
               )}
 
-              {/* Resize controls for original image */}
-              {!isShowingGenerated && uploadedImage && (
-                <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-medium text-white/70">Smart resize</p>
-                    {(() => {
-                      const completedCount = originalResizedVersions.filter(r => r.status === 'completed').length + 1;
-                      return completedCount > 1 ? (
-                        <button
-                          onClick={async () => {
-                            if (uploadedImage.url) {
-                              await handleDownload(uploadedImage.url, `original_${uploadedImage.width}x${uploadedImage.height}.png`);
-                            }
-                            for (const resized of originalResizedVersions.filter(r => r.status === 'completed' && r.imageUrl)) {
-                              await handleDownload(resized.imageUrl!, `original_${resized.size}.png`);
-                              await new Promise(resolve => setTimeout(resolve, 300));
-                            }
-                          }}
-                          className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1"
-                        >
-                          <Download className="w-3 h-3" />
-                          Download ({completedCount})
-                        </button>
-                      ) : null;
-                    })()}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setViewingOriginalResizedSize(null)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${
-                        !viewingOriginalResizedSize
-                          ? 'bg-emerald-500 text-white'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
-                      }`}
-                    >
-                      <Check className="w-3 h-3" />
-                      <span>{`${uploadedImage.width}x${uploadedImage.height}`}</span>
-                      <span className="text-white/40">Uploaded</span>
-                    </button>
-                    {AD_SIZES.map((size) => {
-                      const resized = originalResizedVersions.find(r => r.size === size.name);
-                      const isResizing = resized?.status === 'resizing';
-                      const isCompleted = resized?.status === 'completed';
-                      const isViewing = viewingOriginalResizedSize === size.name;
-                      return (
-                        <button
-                          key={size.name}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isCompleted) {
-                              setViewingOriginalResizedSize(size.name);
-                            } else if (!isResizing) {
-                              requireAuth(() => handleResizeOriginal(size));
-                            }
-                          }}
-                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${
-                            isViewing
-                              ? 'bg-emerald-500 text-white'
-                              : isResizing
-                              ? 'bg-white/10 text-white/50 cursor-wait'
-                              : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
-                          }`}
-                        >
-                          {isResizing ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : isCompleted ? (
-                            <Check className="w-3 h-3" />
-                          ) : (
-                            <div
-                              className="bg-white/20 border border-white/30 rounded-[2px]"
-                              style={{
-                                width: size.width >= size.height ? 12 : 12 * (size.width / size.height),
-                                height: size.height >= size.width ? 12 : 12 * (size.height / size.width),
-                              }}
-                            />
-                          )}
-                          <span>{size.name}</span>
-                          <span className="text-white/40">{size.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Image Preview */}
@@ -2364,26 +2218,36 @@ function HomeContent() {
               {previewImage && uploadedImage ? (
                 <>
                   {/*
-                    Container sized to original image's aspect ratio.
+                    Container sized based on what we're viewing:
+                    - Original/edits: use original image's aspect ratio
+                    - Resized versions: use the target size's aspect ratio (e.g., 9:16 for Story)
                     Uses CSS to calculate max size that fits container while preserving aspect ratio.
-                    All versions (original + edits) display at this same size for easy comparison.
                   */}
-                  <div
-                    className="relative rounded-lg shadow-2xl overflow-hidden"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      maxWidth: `min(100%, calc((100vh - 200px) * ${uploadedImage.width / uploadedImage.height}))`,
-                      maxHeight: `min(100%, calc(100vw * ${uploadedImage.height / uploadedImage.width}))`,
-                      aspectRatio: `${uploadedImage.width} / ${uploadedImage.height}`,
-                    }}
-                  >
-                    <img
-                      src={previewImage}
-                      alt={isShowingGenerated ? 'Generated variation' : 'Original ad'}
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                  </div>
+                  {(() => {
+                    // Determine display dimensions based on whether viewing a resize
+                    const displayDimensions = viewingOriginalResizedSize
+                      ? AD_SIZES.find(s => s.name === viewingOriginalResizedSize) || { width: uploadedImage.width, height: uploadedImage.height }
+                      : { width: uploadedImage.width, height: uploadedImage.height };
+
+                    return (
+                      <div
+                        className="relative rounded-lg shadow-2xl overflow-hidden"
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          maxWidth: `min(100%, calc((100vh - 200px) * ${displayDimensions.width / displayDimensions.height}))`,
+                          maxHeight: `min(100%, calc(100vw * ${displayDimensions.height / displayDimensions.width}))`,
+                          aspectRatio: `${displayDimensions.width} / ${displayDimensions.height}`,
+                        }}
+                      >
+                        <img
+                          src={previewImage}
+                          alt={isShowingGenerated ? 'Generated variation' : 'Original ad'}
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      </div>
+                    );
+                  })()}
                   {/* Loading overlay when viewing a processing version */}
                   {!isShowingGenerated && originalVersions.length > 0 && originalVersions[originalVersionIndex]?.status === 'processing' && (
                     <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center">
@@ -2460,25 +2324,43 @@ function HomeContent() {
               {/* Action buttons overlay */}
               {previewImage && (
                 <div className="absolute top-3 right-3 flex gap-2">
-                  {/* Create Version button - shows when viewing generated variation or edited original */}
-                  {(isShowingGenerated && selectedVariation?.imageUrl) || (originalVersions.length > 0 && originalVersionIndex > 0) ? (
+                  {/* Delete Version button - disabled on original, enabled on edits */}
+                  {!isShowingGenerated && (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
-                          onClick={() => {
-                            const sourceLabel = isShowingGenerated && selectedVariation
-                              ? `From: ${selectedVariation.title}`
-                              : originalVersions[originalVersionIndex]?.prompt || 'Edited version';
-                            handleCreateVersion(previewImage, sourceLabel);
-                          }}
-                          className="p-2 rounded-lg bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white/70 hover:text-white transition-colors"
+                          onClick={handleDeleteVersion}
+                          disabled={originalVersionIndex === 0 || originalVersions[originalVersionIndex]?.status === 'processing'}
+                          className="p-2 rounded-lg bg-black/50 hover:bg-red-600/80 backdrop-blur-sm text-white/70 hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-black/50 disabled:cursor-not-allowed"
                         >
-                          <Layers className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent>Create new version</TooltipContent>
+                      <TooltipContent>
+                        {originalVersionIndex === 0 ? "Can't delete original" : "Delete this edit"}
+                      </TooltipContent>
                     </Tooltip>
-                  ) : null}
+                  )}
+                  {/* Create Version button - disabled on original, enabled on edits/variations */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => {
+                          const sourceLabel = isShowingGenerated && selectedVariation
+                            ? `From: ${selectedVariation.title}`
+                            : originalVersions[originalVersionIndex]?.prompt || 'Edited version';
+                          handleCreateVersion(previewImage, sourceLabel);
+                        }}
+                        disabled={!isShowingGenerated && originalVersionIndex === 0}
+                        className="p-2 rounded-lg bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white/70 hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-black/50 disabled:cursor-not-allowed"
+                      >
+                        <Layers className="w-4 h-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {!isShowingGenerated && originalVersionIndex === 0 ? "Edit image first to create version" : "Create new version"}
+                    </TooltipContent>
+                  </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -2516,7 +2398,7 @@ function HomeContent() {
           <div className="w-[360px] flex-shrink-0 border border-white/10 rounded-2xl bg-white/[0.02] flex flex-col overflow-hidden order-first">
             {/* Versions Tool */}
             {selectedTool === 'iterations' && (
-              <>
+              <div className="animate-in fade-in slide-in-from-left-2 duration-200 flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="p-4 border-b border-white/10">
                   <div className="flex items-center justify-between mb-1">
@@ -2575,11 +2457,8 @@ function HomeContent() {
 
                       {/* Context input */}
                       <div className="mb-3">
-                        <label className="text-xs text-white/40 mb-1.5 block">
-                          Optional: Add additional context to guide the suggestions
-                        </label>
                         <Textarea
-                          placeholder="Add context like 'Black Friday sale' or 'Target millennials'"
+                          placeholder="Optional: Add additional context to guide the suggestions"
                           value={additionalContext}
                           onChange={(e) => setAdditionalContext(e.target.value)}
                           className="w-full bg-white/5 border-white/10 text-white placeholder:text-white/30 min-h-[60px] resize-none text-sm"
@@ -2661,12 +2540,12 @@ function HomeContent() {
                     </Button>
                   )}
                 </div>
-              </>
+              </div>
             )}
 
             {/* Edit Tool - with resize presets */}
             {selectedTool === 'edit' && (
-              <div className="p-4 flex flex-col h-full">
+              <div className="animate-in fade-in slide-in-from-left-2 duration-200 p-4 flex flex-col h-full">
                 {/* Current Size */}
                 {uploadedImage && (
                   <div className="mb-4 p-3 rounded-lg bg-white/5 border border-white/10">
@@ -2977,73 +2856,130 @@ function HomeContent() {
                   )}
                 </div>
 
-                {/* Smart Resize */}
-                <div className="mt-4">
-                  <h3 className="text-sm font-medium mb-2 text-white/70">Smart resize</h3>
-                  <div className="space-y-1.5">
-                    {AD_SIZES.map((size) => {
-                      const resized = originalResizedVersions.find(r => r.size === size.name);
-                      const isResizing = resized?.status === 'resizing';
-                      const isCompleted = resized?.status === 'completed';
-                      return (
-                        <button
-                          key={size.name}
-                          onClick={() => {
-                            if (isCompleted) {
-                              setViewingOriginalResizedSize(size.name);
-                            } else if (!isResizing) {
-                              requireAuth(() => handleResizeOriginal(size));
-                            }
-                          }}
-                          disabled={isResizing}
-                          className={`w-full px-3 py-2 rounded-lg border transition-all text-left flex items-center justify-between text-sm ${
-                            isCompleted
-                              ? 'bg-amber-600/10 border-amber-500/30 hover:bg-amber-600/20'
-                              : 'bg-white/5 border-white/10 hover:bg-white/10'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            {isResizing ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-white/50" />
-                            ) : isCompleted ? (
-                              <Check className="w-3.5 h-3.5 text-amber-400" />
-                            ) : (
-                              <div
-                                className="bg-white/20 border border-white/30 rounded-[2px]"
-                                style={{
-                                  width: size.width >= size.height ? 14 : 14 * (size.width / size.height),
-                                  height: size.height >= size.width ? 14 : 14 * (size.height / size.width),
-                                }}
-                              />
-                            )}
-                            <span className={isCompleted ? 'text-amber-300' : ''}>{size.label}</span>
-                          </div>
-                          <span className="text-white/40 text-xs">{size.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
             )}
 
             {/* Export Tool */}
             {selectedTool === 'export' && (
-              <div className="p-4">
-                <h2 className="font-semibold mb-2">Export</h2>
-                <p className="text-sm text-white/50 mb-4">
-                  Download your images.
+              <div className="animate-in fade-in slide-in-from-left-2 duration-200 p-4 flex flex-col h-full">
+                <h2 className="font-semibold mb-1">Export</h2>
+                <p className="text-xs text-white/50 mb-4">
+                  Resize and download your images.
                 </p>
-                <div className="space-y-2">
+
+                {/* Smart Resize Section */}
+                {uploadedImage && (
+                  <div className="mb-4">
+                    <div className="space-y-1.5">
+                      {/* Original size button */}
+                      <button
+                        onClick={() => setViewingOriginalResizedSize(null)}
+                        className={`w-full px-3 py-2 rounded-lg border transition-all text-left flex items-center justify-between text-sm ${
+                          !viewingOriginalResizedSize
+                            ? 'bg-emerald-600/20 border-emerald-500/40'
+                            : 'bg-white/5 border-white/10 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Check className={`w-3.5 h-3.5 ${!viewingOriginalResizedSize ? 'text-emerald-400' : 'text-white/40'}`} />
+                          <span className={!viewingOriginalResizedSize ? 'text-emerald-300' : ''}>Original</span>
+                        </div>
+                        <span className="text-white/40 text-xs">{uploadedImage.width}×{uploadedImage.height}</span>
+                      </button>
+                      {/* Resize options */}
+                      {AD_SIZES.map((size) => {
+                        const resized = originalResizedVersions.find(r => r.size === size.name);
+                        const isResizing = resized?.status === 'resizing';
+                        const isCompleted = resized?.status === 'completed';
+                        const isViewing = viewingOriginalResizedSize === size.name;
+                        return (
+                          <button
+                            key={size.name}
+                            onClick={() => {
+                              if (isCompleted) {
+                                setViewingOriginalResizedSize(isViewing ? null : size.name);
+                              } else if (!isResizing) {
+                                requireAuth(() => handleResizeOriginal(size));
+                              }
+                            }}
+                            disabled={isResizing}
+                            className={`w-full px-3 py-2 rounded-lg border transition-all text-left flex items-center justify-between text-sm ${
+                              isViewing
+                                ? 'bg-emerald-600/20 border-emerald-500/40'
+                                : isCompleted
+                                ? 'bg-amber-600/10 border-amber-500/30 hover:bg-amber-600/20'
+                                : 'bg-white/5 border-white/10 hover:bg-white/10'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              {isResizing ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-white/50" />
+                              ) : isCompleted ? (
+                                <Check className={`w-3.5 h-3.5 ${isViewing ? 'text-emerald-400' : 'text-amber-400'}`} />
+                              ) : (
+                                <div
+                                  className="bg-white/20 border border-white/30 rounded-[2px]"
+                                  style={{
+                                    width: size.width >= size.height ? 14 : 14 * (size.width / size.height),
+                                    height: size.height >= size.width ? 14 : 14 * (size.height / size.width),
+                                  }}
+                                />
+                              )}
+                              <span className={isViewing ? 'text-emerald-300' : isCompleted ? 'text-amber-300' : ''}>{size.label}</span>
+                            </div>
+                            <span className="text-white/40 text-xs">{size.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Download Section */}
+                <div className="mt-auto space-y-2">
+                  <h3 className="text-xs text-white/40 uppercase tracking-wide mb-2">Download</h3>
                   {uploadedImage && (
                     <button
-                      onClick={() => handleDownload(uploadedImage.url, uploadedImage.filename)}
+                      onClick={() => {
+                        if (viewingOriginalResizedSize) {
+                          const resized = originalResizedVersions.find(r => r.size === viewingOriginalResizedSize);
+                          if (resized?.imageUrl) {
+                            handleDownload(resized.imageUrl, `${uploadedImage.filename.replace(/\.[^.]+$/, '')}_${viewingOriginalResizedSize}.png`);
+                          }
+                        } else {
+                          handleDownload(uploadedImage.url, uploadedImage.filename);
+                        }
+                      }}
                       className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-left flex items-center gap-3"
                     >
                       <Download className="w-4 h-4 text-white/60" />
                       <div>
-                        <div className="font-medium">Original Image</div>
-                        <div className="text-xs text-white/40">{uploadedImage.filename}</div>
+                        <div className="font-medium">Current View</div>
+                        <div className="text-xs text-white/40">
+                          {viewingOriginalResizedSize || `${uploadedImage.width}×${uploadedImage.height}`}
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                  {originalResizedVersions.filter(r => r.status === 'completed').length > 0 && (
+                    <button
+                      onClick={async () => {
+                        if (uploadedImage?.url) {
+                          await handleDownload(uploadedImage.url, `original_${uploadedImage.width}x${uploadedImage.height}.png`);
+                        }
+                        for (const resized of originalResizedVersions.filter(r => r.status === 'completed' && r.imageUrl)) {
+                          await handleDownload(resized.imageUrl!, `original_${resized.size}.png`);
+                          await new Promise(resolve => setTimeout(resolve, 300));
+                        }
+                      }}
+                      className="w-full px-4 py-3 rounded-lg bg-amber-600/20 border border-amber-500/30 hover:bg-amber-600/30 transition-all text-left flex items-center gap-3"
+                    >
+                      <FolderDown className="w-4 h-4 text-amber-400" />
+                      <div>
+                        <div className="font-medium text-amber-300">Download All Sizes</div>
+                        <div className="text-xs text-white/40">
+                          {originalResizedVersions.filter(r => r.status === 'completed').length + 1} sizes
+                        </div>
                       </div>
                     </button>
                   )}
@@ -3058,11 +2994,11 @@ function HomeContent() {
                           onConfirm: downloadAllGenerations,
                         });
                       }}
-                      className="w-full px-4 py-3 rounded-lg bg-amber-600/20 border border-amber-500/30 hover:bg-amber-600/30 transition-all text-left flex items-center gap-3"
+                      className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-left flex items-center gap-3"
                     >
-                      <FolderDown className="w-4 h-4 text-amber-400" />
+                      <FolderDown className="w-4 h-4 text-white/60" />
                       <div>
-                        <div className="font-medium text-amber-300">Download All</div>
+                        <div className="font-medium">Download All Variations</div>
                         <div className="text-xs text-white/40">{completedCount} generated images</div>
                       </div>
                     </button>
@@ -3073,7 +3009,7 @@ function HomeContent() {
 
             {/* Backgrounds Tool */}
             {selectedTool === 'backgrounds' && (
-              <div className="p-4 flex flex-col h-full">
+              <div className="animate-in fade-in slide-in-from-left-2 duration-200 p-4 flex flex-col h-full">
                 <h2 className="font-semibold mb-1">Backgrounds</h2>
                 <p className="text-xs text-white/50 mb-3">
                   Change the background while preserving the product and any models.
@@ -3186,17 +3122,16 @@ function HomeContent() {
 
             {/* No tool selected */}
             {selectedTool === null && (
-              <div className="p-4 flex-1 flex flex-col items-center justify-center text-center">
+              <div className="animate-in fade-in duration-200 p-4 flex-1 flex flex-col items-center justify-center text-center">
                 <Info className="w-8 h-8 text-white/20 mb-3" />
                 <p className="text-white/40 text-sm">Select a tool from the sidebar to get started</p>
               </div>
             )}
 
-            {/* Variation Cards - Only show for iterations tool */}
-            {selectedTool === 'iterations' && variations.length > 0 && (
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {/* Variation Cards - Show for iterations tool when image uploaded */}
+            {selectedTool === 'iterations' && uploadedImage && (
+              <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
                 {/* Original Image Card - Always at top */}
-                {uploadedImage && (
                 <div
                   onClick={() => {
                     setSelectedVariationId(null);
@@ -3220,28 +3155,41 @@ function HomeContent() {
                       </div>
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <ImageIcon className="w-4 h-4 text-emerald-400" />
                           <span className="font-medium text-sm text-emerald-400">Original</span>
+                          {originalVersions.length > 1 && (
+                            <span className="text-xs text-white/40 bg-white/10 px-1.5 py-0.5 rounded">
+                              {originalVersions.length - 1} edit{originalVersions.length > 2 ? 's' : ''}
+                            </span>
+                          )}
+                          {originalResizedVersions.filter(r => r.status === 'completed').length > 0 && (
+                            <span className="text-xs text-amber-400/80 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                              {originalResizedVersions.filter(r => r.status === 'completed').length + 1} sizes
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-white/50">
                           {uploadedImage.filename}
                         </p>
                         <p className="text-xs text-white/40 mt-1">
-                          {uploadedImage.aspectRatio} • {uploadedImage.width}×{uploadedImage.height}
+                          {uploadedImage.aspectRatio.includes('(')
+                            ? uploadedImage.aspectRatio
+                            : `${uploadedImage.aspectRatio} • ${uploadedImage.width}×${uploadedImage.height}`}
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
-              )}
 
-              {/* Divider */}
-              <div className="flex items-center gap-2 py-1">
-                <div className="flex-1 border-t border-white/10"></div>
-                <span className="text-xs text-white/30 uppercase tracking-wide">Suggested</span>
-                <div className="flex-1 border-t border-white/10"></div>
-              </div>
+              {/* Divider - only show when there are variations */}
+              {variations.length > 0 && (
+                <div className="flex items-center gap-2 py-1">
+                  <div className="flex-1 border-t border-white/10"></div>
+                  <span className="text-xs text-white/30 uppercase tracking-wide">Suggested</span>
+                  <div className="flex-1 border-t border-white/10"></div>
+                </div>
+              )}
 
               {variations.filter(v => !v.isArchived).map((variation) => (
                 <div
@@ -3464,110 +3412,6 @@ function HomeContent() {
                   </div>
                 </div>
               ))}
-
-              {/* Suggest Another Iteration */}
-              <button
-                onClick={async () => {
-                  if (!analysis || isSuggestingIteration) return;
-                  setIsSuggestingIteration(true);
-                  try {
-                    const response = await fetch('/api/suggest-variations', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        analysis,
-                        aspectRatio: uploadedImage?.aspectRatio,
-                        additionalContext: `Already suggested: ${variations.map(v => v.title).join(', ')}. Suggest something different.`,
-                      }),
-                    });
-                    if (response.ok) {
-                      const data = await response.json();
-                      if (data.variations && data.variations.length > 0) {
-                        const newVariation: Variation = {
-                          id: uuidv4(),
-                          title: data.variations[0].title,
-                          description: data.variations[0].description,
-                          imageUrl: null,
-                          status: 'idle',
-                          isEditing: false,
-                          editPrompt: '',
-                          isEditingGenerated: false,
-                          resizedVersions: [],
-                          versions: [],
-                          currentVersionIndex: 0,
-                          isRegenerating: false,
-                          hasNewVersion: false,
-                          isArchived: false,
-                        };
-                        setVariations(prev => [...prev, newVariation]);
-                      }
-                    }
-                  } catch (err) {
-                    console.error('Failed to suggest iteration:', err);
-                  } finally {
-                    setIsSuggestingIteration(false);
-                  }
-                }}
-                disabled={isSuggestingIteration}
-                className="w-full py-3 rounded-xl border border-dashed border-white/20 hover:border-amber-500/50 hover:bg-amber-500/5 text-white/50 hover:text-amber-400 transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSuggestingIteration ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4" />
-                )}
-                {isSuggestingIteration ? 'Suggesting...' : 'Suggest another iteration'}
-              </button>
-
-              {/* Add Custom Variation */}
-              <div className="rounded-xl border border-dashed border-white/10 p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <p className="text-sm font-medium text-white/60">Add custom iteration</p>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={handleGeneratePrompt}
-                      disabled={isGeneratingPrompt || !analysis}
-                      className="flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isGeneratingPrompt ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Wand2 className="w-3 h-3" />
-                      )}
-                      Suggest
-                    </button>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={weirdnessLevel}
-                      onChange={(e) => setWeirdnessLevel(parseInt(e.target.value))}
-                      className="w-14 weirdness-slider"
-                    />
-                    <span className={`text-[10px] ${getWeirdnessLabel(weirdnessLevel).color}`}>
-                      {getWeirdnessLabel(weirdnessLevel).label}
-                    </span>
-                  </div>
-                </div>
-
-                <Textarea
-                  placeholder="Describe your variation... (e.g., 'coffee shop setting' or 'sunset lighting')"
-                  value={customPrompt}
-                  onChange={(e) => setCustomPrompt(e.target.value)}
-                  className="text-sm bg-white/5 border-white/10 text-white/80 min-h-[60px] resize-none mb-2"
-                  rows={2}
-                />
-
-                <Button
-                  size="sm"
-                  onClick={handleAddCustomVariation}
-                  disabled={!customPrompt.trim()}
-                  className="w-full bg-white/10 text-white hover:bg-white/20 disabled:opacity-50 disabled:text-white/40"
-                >
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  Add Iteration
-                </Button>
-              </div>
 
               {/* Archived Section */}
               {variations.filter(v => v.isArchived).length > 0 && (
