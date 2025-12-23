@@ -39,6 +39,7 @@ import {
   Droplets,
   Clock,
   Aperture,
+  User,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -61,7 +62,7 @@ import { uploadFileToConvex, dataUrlToBlob } from '@/lib/convex-storage';
 // import { PlanSelectionModal } from '@/components/PlanSelectionModal';
 
 type Step = 'upload' | 'editor';
-type Tool = 'edit' | 'iterations' | 'export' | 'backgrounds' | null;
+type Tool = 'edit' | 'iterations' | 'backgrounds' | 'model' | 'export' | null;
 
 interface UploadedImage {
   file: File;
@@ -183,6 +184,25 @@ function HomeContent() {
   const [isLoadingBackgroundSuggestions, setIsLoadingBackgroundSuggestions] = useState(false);
   const [backgroundCustomPrompt, setBackgroundCustomPrompt] = useState('');
 
+  // Model tool state
+  const [modelSuggestions, setModelSuggestions] = useState<{id: string, name: string, description: string, prompt: string}[]>([]);
+  const [isLoadingModelSuggestions, setIsLoadingModelSuggestions] = useState(false);
+  const [modelCustomPrompt, setModelCustomPrompt] = useState('');
+  const [keepClothing, setKeepClothing] = useState(true);
+  // Model builder selections
+  const [selectedGender, setSelectedGender] = useState<string | null>(null);
+  const [selectedAgeRange, setSelectedAgeRange] = useState<string | null>(null);
+  const [selectedEthnicity, setSelectedEthnicity] = useState<string | null>(null);
+  const [selectedHairColor, setSelectedHairColor] = useState<string | null>(null);
+  const [selectedHairType, setSelectedHairType] = useState<string | null>(null);
+  const [selectedBodyType, setSelectedBodyType] = useState<string | null>(null);
+  const [selectedExpression, setSelectedExpression] = useState<string | null>(null);
+  const [selectedVibe, setSelectedVibe] = useState<string | null>(null);
+
+  // Track used suggestions - to show visual indicator
+  const [usedBackgroundSuggestions, setUsedBackgroundSuggestions] = useState<Set<string>>(new Set());
+  const [usedModelSuggestions, setUsedModelSuggestions] = useState<Set<string>>(new Set());
+
   // Presets state
   const [selectedPresets, setSelectedPresets] = useState<{
     lighting: string | null;
@@ -268,20 +288,83 @@ function HomeContent() {
     { id: 'office-workspace', name: 'Office/Workspace', prompt: 'Modern office or workspace setting with desk and professional environment' },
     { id: 'beach-coastal', name: 'Beach/Coastal', prompt: 'Beach or coastal setting with ocean, sand, and warm sunlight' },
     { id: 'coffee-shop', name: 'Coffee Shop', prompt: 'Cozy coffee shop or cafe interior with warm ambient lighting' },
-    { id: 'darken-bg', name: 'Darken Background', prompt: 'Darken the background for dramatic subject emphasis' },
+    { id: 'darken-bg', name: 'Darken Background', prompt: 'Keep the exact same background scene and location but darken it for dramatic subject emphasis. Do not change or replace the background - only reduce its brightness and exposure.' },
     { id: 'simplify-scene', name: 'Simplify Scene', prompt: 'Reduce visual clutter, remove distracting elements from background' },
-    // Time of day lighting
-    { id: 'golden-hour', name: 'Golden Hour', prompt: 'Warm golden hour lighting with soft orange and amber tones, long shadows, sunset or sunrise atmosphere' },
-    { id: 'sunrise-glow', name: 'Sunrise Glow', prompt: 'Soft early morning sunrise light with pink and orange hues, gentle warm glow, dawn atmosphere' },
-    { id: 'blue-hour', name: 'Blue Hour', prompt: 'Twilight blue hour lighting with cool blue and purple tones, dramatic cinematic atmosphere' },
-    { id: 'moonlit-night', name: 'Moonlit Night', prompt: 'Nighttime scene with soft moonlight illumination, cool blue tones, subtle shadows, nocturnal atmosphere' },
-    { id: 'bright-midday', name: 'Bright Midday', prompt: 'Bright midday summer sun with high contrast, strong overhead lighting, vibrant colors' },
-    { id: 'winter-light', name: 'Winter Light', prompt: 'Cool winter sunlight with low angle, soft cool blue tones, crisp clear atmosphere' },
-    // Weather conditions
-    { id: 'overcast-sky', name: 'Overcast Sky', prompt: 'Soft overcast lighting with diffused clouds, no harsh shadows, even gentle illumination' },
-    { id: 'foggy-misty', name: 'Foggy/Misty', prompt: 'Atmospheric fog or mist in the background, ethereal dreamy quality, soft diffused light' },
-    { id: 'rainy-day', name: 'Rainy Day', prompt: 'Rainy day atmosphere with wet surfaces, reflections, moody overcast sky, atmospheric mood' },
+    // Lighting adjustments (preserve scene, change only lighting/mood)
+    { id: 'golden-hour', name: 'Golden Hour', prompt: 'LIGHTING ADJUSTMENT ONLY: Keep the exact same background scene and location. Apply warm golden hour lighting with soft orange and amber tones, long dramatic shadows. Adjust the color temperature and lighting to simulate sunset/sunrise. Do not change or replace the background elements.' },
+    { id: 'sunrise-glow', name: 'Sunrise Glow', prompt: 'LIGHTING ADJUSTMENT ONLY: Keep the exact same background scene and location. Apply soft early morning sunrise lighting with pink and orange hues, gentle warm glow. Adjust shadows and color temperature for dawn atmosphere. Do not change or replace the background elements.' },
+    { id: 'blue-hour', name: 'Blue Hour', prompt: 'LIGHTING ADJUSTMENT ONLY: Keep the exact same background scene and location. Apply twilight blue hour lighting with cool blue and purple tones, dramatic cinematic shadows. Adjust color temperature to cool tones. Do not change or replace the background elements.' },
+    { id: 'moonlit-night', name: 'Moonlit Night', prompt: 'LIGHTING ADJUSTMENT ONLY: Keep the exact same background scene and location. Apply nighttime moonlight illumination with cool blue tones and subtle shadows. Darken the scene and adjust to nocturnal lighting. Do not change or replace the background elements.' },
+    { id: 'bright-midday', name: 'Bright Midday', prompt: 'LIGHTING ADJUSTMENT ONLY: Keep the exact same background scene and location. Apply bright midday sun lighting with high contrast, strong overhead shadows, vibrant saturated colors. Adjust exposure and shadows for summer sun. Do not change or replace the background elements.' },
+    { id: 'winter-light', name: 'Winter Light', prompt: 'LIGHTING ADJUSTMENT ONLY: Keep the exact same background scene and location. Apply cool winter sunlight with low angle lighting, soft cool blue tones, crisp clear atmosphere. Adjust color temperature to cool. Do not change or replace the background elements.' },
+    // Weather/atmosphere adjustments (preserve scene, change only mood)
+    { id: 'overcast-sky', name: 'Overcast Sky', prompt: 'LIGHTING ADJUSTMENT ONLY: Keep the exact same background scene and location. Apply soft overcast lighting with diffused shadows, no harsh contrasts, even gentle illumination. Flatten the lighting as if clouds are diffusing the sun. Do not change or replace the background elements.' },
+    { id: 'foggy-misty', name: 'Foggy/Misty', prompt: 'ATMOSPHERE ADJUSTMENT ONLY: Keep the exact same background scene and location. Add subtle atmospheric fog or mist to create ethereal dreamy quality with soft diffused light. Reduce background clarity slightly. Do not change or replace the background elements.' },
+    { id: 'rainy-day', name: 'Rainy Day', prompt: 'ATMOSPHERE ADJUSTMENT ONLY: Keep the exact same background scene and location. Apply rainy day mood with wet surface reflections, moody overcast lighting, atmospheric dampness. Add subtle rain atmosphere. Do not change or replace the background elements.' },
   ];
+
+  // Model builder options
+  const MODEL_OPTIONS = {
+    gender: [
+      { id: 'female', label: 'Female' },
+      { id: 'male', label: 'Male' },
+      { id: 'any', label: 'Any' },
+    ],
+    ageRange: [
+      { id: '18-25', label: 'Young Adult (18-25)' },
+      { id: '26-35', label: 'Adult (26-35)' },
+      { id: '36-50', label: 'Middle-Aged (36-50)' },
+      { id: '50+', label: 'Mature (50+)' },
+    ],
+    ethnicity: [
+      { id: 'east-asian', label: 'East Asian' },
+      { id: 'south-asian', label: 'South Asian' },
+      { id: 'black', label: 'Black/African' },
+      { id: 'hispanic', label: 'Hispanic/Latino' },
+      { id: 'middle-eastern', label: 'Middle Eastern' },
+      { id: 'white', label: 'White/Caucasian' },
+      { id: 'mixed', label: 'Mixed/Multiracial' },
+    ],
+    hairColor: [
+      { id: 'black', label: 'Black' },
+      { id: 'brown', label: 'Brown' },
+      { id: 'blonde', label: 'Blonde' },
+      { id: 'red', label: 'Red' },
+      { id: 'gray', label: 'Gray/Silver' },
+    ],
+    hairType: [
+      { id: 'straight', label: 'Straight' },
+      { id: 'wavy', label: 'Wavy' },
+      { id: 'curly', label: 'Curly' },
+      { id: 'coily', label: 'Coily' },
+      { id: 'short', label: 'Short' },
+      { id: 'long', label: 'Long' },
+      { id: 'bald', label: 'Bald' },
+    ],
+    bodyType: [
+      { id: 'slim', label: 'Slim' },
+      { id: 'athletic', label: 'Athletic' },
+      { id: 'average', label: 'Average' },
+      { id: 'curvy', label: 'Curvy' },
+      { id: 'plus-size', label: 'Plus-size' },
+    ],
+    expression: [
+      { id: 'warm-friendly', label: 'Warm & Friendly' },
+      { id: 'confident', label: 'Confident' },
+      { id: 'playful', label: 'Playful' },
+      { id: 'serious', label: 'Serious/Intense' },
+      { id: 'mysterious', label: 'Mysterious' },
+      { id: 'approachable', label: 'Approachable' },
+    ],
+    vibe: [
+      { id: 'classic', label: 'Classic/Timeless' },
+      { id: 'modern-edgy', label: 'Modern/Edgy' },
+      { id: 'outdoorsy', label: 'Outdoorsy' },
+      { id: 'urban', label: 'Urban' },
+      { id: 'glamorous', label: 'Glamorous' },
+      { id: 'next-door', label: 'Girl/Guy Next Door' },
+    ],
+  };
 
   const [viewingOriginalResizedSize, setViewingOriginalResizedSize] = useState<string | null>(null);
 
@@ -318,7 +401,7 @@ function HomeContent() {
 
       if (e.shiftKey && e.key === 'ArrowLeft') {
         // Shift + Left = Previous tool
-        const tools: Tool[] = ['iterations', 'edit', 'backgrounds', 'export'];
+        const tools: Tool[] = ['iterations', 'edit', 'backgrounds', 'model', 'export'];
         setSelectedTool(prev => {
           if (prev === null) return 'export'; // Start from end
           const currentIndex = tools.indexOf(prev);
@@ -326,7 +409,7 @@ function HomeContent() {
         });
       } else if (e.shiftKey && e.key === 'ArrowRight') {
         // Shift + Right = Next tool
-        const tools: Tool[] = ['iterations', 'edit', 'backgrounds', 'export'];
+        const tools: Tool[] = ['iterations', 'edit', 'backgrounds', 'model', 'export'];
         setSelectedTool(prev => {
           if (prev === null) return 'iterations'; // Start from beginning
           const currentIndex = tools.indexOf(prev);
@@ -415,7 +498,7 @@ function HomeContent() {
             editPrompt: '',
             isEditingGenerated: false,
             resizedVersions: [],
-            versions: v.image_url ? [{ imageUrl: v.image_url, prompt: null, parentIndex: -1 }] : [],
+            versions: v.image_url ? [{ imageUrl: v.image_url, prompt: null, parentIndex: -1, status: 'completed' as const }] : [],
             currentVersionIndex: 0,
             isRegenerating: false,
             hasNewVersion: false,
@@ -681,7 +764,7 @@ function HomeContent() {
           ...v,
           status: 'completed',
           imageUrl,
-          versions: [{ imageUrl, prompt: null, parentIndex: -1 }], // Store first version (no edit prompt for initial generation)
+          versions: [{ imageUrl, prompt: null, parentIndex: -1, status: 'completed' as const }], // Store first version (no edit prompt for initial generation)
           currentVersionIndex: 0,
         } : v))
       );
@@ -852,7 +935,7 @@ function HomeContent() {
       setVariations(prev =>
         prev.map(v => {
           if (v.id !== variationId) return v;
-          const newVersions: ImageVersion[] = [...v.versions, { imageUrl, prompt: editPromptUsed, parentIndex: v.currentVersionIndex }];
+          const newVersions: ImageVersion[] = [...v.versions, { imageUrl, prompt: editPromptUsed, parentIndex: v.currentVersionIndex, status: 'completed' as const }];
           return {
             ...v,
             isRegenerating: false,
@@ -1124,57 +1207,62 @@ function HomeContent() {
     // Build background label for version history
     const backgroundLabel = `[background] ${label}`;
 
-    // Use functional update to handle concurrent calls correctly
-    // Each call will see the latest state and add to it
-    let newVersionIndex: number = -1;
-    let parentIndex: number = -1;
-    let imageToUse: string | null = null;
+    // Compute values BEFORE state update (React 18+ batches state updates)
+    const currentVersions: ImageVersion[] = originalVersions.length === 0
+      ? [{ imageUrl: uploadedImage.url, prompt: null, parentIndex: -1, status: 'completed' as const }]
+      : originalVersions;
 
-    setOriginalVersions(prev => {
-      const currentVersions: ImageVersion[] = prev.length === 0
-        ? [{ imageUrl: uploadedImage.url, prompt: null, parentIndex: -1, status: 'completed' as const }]
-        : prev;
+    const safeIndex = Math.min(originalVersionIndex, currentVersions.length - 1);
+    const currentVersion = currentVersions[safeIndex] || currentVersions[0];
 
-      // Find the current version to use as parent
-      const safeIndex = Math.min(originalVersionIndex, currentVersions.length - 1);
-      const currentVersion = currentVersions[safeIndex] || currentVersions[0];
-
-      // Only allow editing completed versions
-      if (!currentVersion || currentVersion.status !== 'completed') {
-        return prev; // Don't modify state
-      }
-
-      parentIndex = safeIndex;
-      imageToUse = currentVersion.imageUrl || uploadedImage.url;
-
-      const processingVersion: ImageVersion = {
-        imageUrl: null,
-        prompt: backgroundLabel,
-        parentIndex: safeIndex,
-        status: 'processing'
-      };
-
-      newVersionIndex = currentVersions.length;
-      return [...currentVersions, processingVersion];
-    });
-
-    // If we couldn't create a version, bail out
-    if (newVersionIndex === -1 || !imageToUse) {
+    // Only allow editing completed versions
+    if (!currentVersion || currentVersion.status !== 'completed') {
       return;
     }
 
+    const imageToUse = currentVersion.imageUrl || uploadedImage.url;
+    const newVersionIndex = currentVersions.length;
+
+    // Add processing version to state
+    const processingVersion: ImageVersion = {
+      imageUrl: null,
+      prompt: backgroundLabel,
+      parentIndex: safeIndex,
+      status: 'processing'
+    };
+
+    setOriginalVersions([...currentVersions, processingVersion]);
+
     try {
-      // imageToUse was captured from the state updater above
-      const imageResponse = await fetch(imageToUse);
-      const blob = await imageResponse.blob();
-      const base64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]);
-        };
-        reader.readAsDataURL(blob);
-      });
+      // Convert image to base64 - use File directly if available (avoids blob URL fetch issues)
+      let base64: string;
+      let mimeType: string;
+
+      if (imageToUse === uploadedImage.url && uploadedImage.file) {
+        // Use the original file directly - more reliable than fetching blob URL
+        base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.readAsDataURL(uploadedImage.file);
+        });
+        mimeType = uploadedImage.file.type;
+      } else {
+        // Fetch the image (works for data URLs from API responses)
+        const imageResponse = await fetch(imageToUse);
+        const blob = await imageResponse.blob();
+        base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.readAsDataURL(blob);
+        });
+        mimeType = blob.type;
+      }
 
       // Use analysis if available, otherwise provide minimal context
       const analysisToUse = analysis || {
@@ -1192,7 +1280,7 @@ function HomeContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: base64,
-          mimeType: blob.type,
+          mimeType: mimeType,
           analysis: analysisToUse,
           variationDescription: prompt,
           aspectRatio: uploadedImage.aspectRatio,
@@ -1277,6 +1365,215 @@ function HomeContent() {
     }
   };
 
+  // Apply model change - similar to background change but for model only
+  const handleApplyModelChange = async (prompt: string, label: string) => {
+    if (!uploadedImage) return;
+
+    // Build model label for version history
+    const modelLabel = `[model] ${label}`;
+
+    // Compute values BEFORE state update (React 18+ batches state updates)
+    const currentVersions: ImageVersion[] = originalVersions.length === 0
+      ? [{ imageUrl: uploadedImage.url, prompt: null, parentIndex: -1, status: 'completed' as const }]
+      : originalVersions;
+
+    const safeIndex = Math.min(originalVersionIndex, currentVersions.length - 1);
+    const currentVersion = currentVersions[safeIndex] || currentVersions[0];
+
+    if (!currentVersion || currentVersion.status !== 'completed') {
+      return;
+    }
+
+    const imageToUse = currentVersion.imageUrl || uploadedImage.url;
+    const newVersionIndex = currentVersions.length;
+
+    // Add processing version to state
+    const processingVersion: ImageVersion = {
+      imageUrl: null,
+      prompt: modelLabel,
+      parentIndex: safeIndex,
+      status: 'processing'
+    };
+
+    setOriginalVersions([...currentVersions, processingVersion]);
+
+    try {
+      // Convert image to base64 - use File directly if available (avoids blob URL fetch issues)
+      let base64: string;
+      let mimeType: string;
+
+      if (imageToUse === uploadedImage.url && uploadedImage.file) {
+        // Use the original file directly - more reliable than fetching blob URL
+        base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.readAsDataURL(uploadedImage.file);
+        });
+        mimeType = uploadedImage.file.type;
+      } else {
+        // Fetch the image (works for data URLs from API responses)
+        const imageResponse = await fetch(imageToUse);
+        const blob = await imageResponse.blob();
+        base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.readAsDataURL(blob);
+        });
+        mimeType = blob.type;
+      }
+
+      const analysisToUse = analysis || {
+        product: 'Image',
+        brand_style: 'Not specified',
+        visual_elements: [],
+        key_selling_points: [],
+        target_audience: 'General',
+        colors: [],
+        mood: 'Not specified',
+      };
+
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: base64,
+          mimeType: mimeType,
+          analysis: analysisToUse,
+          variationDescription: prompt,
+          aspectRatio: uploadedImage.aspectRatio,
+          isEdit: true,
+          isModelOnly: true,
+          keepClothing: keepClothing,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setOriginalVersions(prev => prev.map((v, idx) =>
+          idx === newVersionIndex
+            ? { ...v, imageUrl: data.imageUrl, status: 'completed' as const }
+            : v
+        ));
+      } else {
+        setOriginalVersions(prev => prev.map((v, idx) =>
+          idx === newVersionIndex
+            ? { ...v, status: 'error' as const }
+            : v
+        ));
+      }
+    } catch (err) {
+      console.error('Model change error:', err);
+      setOriginalVersions(prev => prev.map((v, idx) =>
+        idx === newVersionIndex
+          ? { ...v, status: 'error' as const }
+          : v
+      ));
+    }
+  };
+
+  // Generate AI model suggestions based on current image
+  const handleGenerateModelSuggestions = async () => {
+    if (!uploadedImage) return;
+
+    setIsLoadingModelSuggestions(true);
+    setModelSuggestions([]);
+
+    try {
+      const currentVersion = originalVersions.length > 0 ? originalVersions[originalVersionIndex] : null;
+      const imageUrl = currentVersion?.imageUrl || uploadedImage.url;
+
+      const imageResponse = await fetch(imageUrl);
+      const blob = await imageResponse.blob();
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.readAsDataURL(blob);
+      });
+
+      const analysisToUse = analysis || {
+        product: 'Unknown',
+        brand_style: 'Not specified',
+        target_audience: 'General',
+        mood: 'Not specified',
+      };
+
+      const response = await fetch('/api/suggest-models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: base64,
+          mimeType: blob.type,
+          analysis: analysisToUse,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setModelSuggestions(data.suggestions || []);
+      }
+    } catch (err) {
+      console.error('Model suggestions error:', err);
+    } finally {
+      setIsLoadingModelSuggestions(false);
+    }
+  };
+
+  // Apply model builder selections
+  const handleApplyModelBuilder = () => {
+    const parts: string[] = [];
+
+    if (selectedGender && selectedGender !== 'any') {
+      parts.push(MODEL_OPTIONS.gender.find(g => g.id === selectedGender)?.label || '');
+    }
+    if (selectedAgeRange) {
+      parts.push(MODEL_OPTIONS.ageRange.find(a => a.id === selectedAgeRange)?.label || '');
+    }
+    if (selectedEthnicity) {
+      parts.push(MODEL_OPTIONS.ethnicity.find(e => e.id === selectedEthnicity)?.label || '');
+    }
+    if (selectedBodyType) {
+      parts.push(`${MODEL_OPTIONS.bodyType.find(b => b.id === selectedBodyType)?.label || ''} build`);
+    }
+    if (selectedHairColor || selectedHairType) {
+      const hairParts: string[] = [];
+      if (selectedHairColor) hairParts.push(MODEL_OPTIONS.hairColor.find(h => h.id === selectedHairColor)?.label || '');
+      if (selectedHairType) hairParts.push(MODEL_OPTIONS.hairType.find(h => h.id === selectedHairType)?.label?.toLowerCase() || '');
+      parts.push(`${hairParts.join(' ')} hair`);
+    }
+    if (selectedExpression) {
+      parts.push(`${MODEL_OPTIONS.expression.find(e => e.id === selectedExpression)?.label || ''} expression`);
+    }
+    if (selectedVibe) {
+      parts.push(`${MODEL_OPTIONS.vibe.find(v => v.id === selectedVibe)?.label || ''} vibe`);
+    }
+
+    const prompt = parts.filter(Boolean).join(', ');
+    if (prompt) {
+      handleApplyModelChange(prompt, prompt);
+    }
+  };
+
+  // Clear all model builder selections
+  const clearModelSelections = () => {
+    setSelectedGender(null);
+    setSelectedAgeRange(null);
+    setSelectedEthnicity(null);
+    setSelectedHairColor(null);
+    setSelectedHairType(null);
+    setSelectedBodyType(null);
+    setSelectedExpression(null);
+    setSelectedVibe(null);
+  };
+
   // Navigate original image versions
   const handleOriginalVersionChange = (direction: 'prev' | 'next') => {
     if (direction === 'prev' && originalVersionIndex > 0) {
@@ -1341,7 +1638,7 @@ function HomeContent() {
       editPrompt: '',
       isEditingGenerated: false,
       resizedVersions: [],
-      versions: [{ imageUrl: currentVersionImage, prompt: null, parentIndex: -1 }],
+      versions: [{ imageUrl: currentVersionImage, prompt: null, parentIndex: -1, status: 'completed' as const }],
       currentVersionIndex: 0,
       isRegenerating: false,
       hasNewVersion: false,
@@ -1512,7 +1809,6 @@ function HomeContent() {
     setAdditionalContext('');
     // Reset original editing state
     setOriginalEditPrompt('');
-    setIsEditingOriginal(false);
     setOriginalVersions([]);
     setOriginalVersionIndex(0);
     setOriginalResizedVersions([]);
@@ -1554,7 +1850,7 @@ function HomeContent() {
     setOriginalVersionIndex(newVersions.length - 1);
 
     // Switch to viewing original (non-generated) to show the new version
-    setIsShowingGenerated(false);
+    // Setting selectedVariationId to null makes isShowingGenerated false (computed value)
     setSelectedVariationId(null);
   };
 
@@ -1582,9 +1878,11 @@ function HomeContent() {
   const downloadVariationAll = async (variation: Variation) => {
     const downloads: { url: string; name: string }[] = [];
 
-    // Add all versions
+    // Add all versions (filter out null imageUrls from processing versions)
     variation.versions.forEach((version, idx) => {
-      downloads.push({ url: version.imageUrl, name: `${variation.title}_v${idx + 1}.png` });
+      if (version.imageUrl) {
+        downloads.push({ url: version.imageUrl, name: `${variation.title}_v${idx + 1}.png` });
+      }
     });
 
     // Add all completed resizes
@@ -1635,7 +1933,7 @@ function HomeContent() {
   // Download current version + all its sizes
   const downloadVersionWithSizes = async (variation: Variation) => {
     const currentVersion = variation.versions[variation.currentVersionIndex];
-    if (!currentVersion) return;
+    if (!currentVersion || !currentVersion.imageUrl) return;
 
     // Download current version
     await handleDownload(currentVersion.imageUrl, `${variation.title}_v${variation.currentVersionIndex + 1}.png`);
@@ -1893,6 +2191,9 @@ function HomeContent() {
                   Versions
                 </button>
 
+                {/* Divider between navigation and editing tools */}
+                <div className="w-px h-6 bg-white/20 mx-1" />
+
                 <button
                   onClick={() => setSelectedTool('edit')}
                   className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
@@ -1915,6 +2216,18 @@ function HomeContent() {
                 >
                   <ImageIcon className="w-4 h-4" />
                   Backgrounds
+                </button>
+
+                <button
+                  onClick={() => setSelectedTool('model')}
+                  className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                    selectedTool === 'model'
+                      ? 'bg-amber-600 text-white'
+                      : 'text-white/50 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <User className="w-4 h-4" />
+                  Model
                 </button>
 
                 <button
@@ -2017,18 +2330,19 @@ function HomeContent() {
                   </div>
                   {/* Label row */}
                   <span className="text-xs text-white/50 text-center">
-                    {selectedVariation.versions[selectedVariation.currentVersionIndex]?.prompt ? (
-                      selectedVariation.versions[selectedVariation.currentVersionIndex]?.prompt?.includes('[preset]') ? (
-                        <span>
-                          <span className="text-amber-400">[preset]</span>
-                          <span className="italic text-white/60"> {selectedVariation.versions[selectedVariation.currentVersionIndex]?.prompt?.replace(' [preset]', '')}</span>
-                        </span>
-                      ) : (
-                        <span className="italic text-white/60">"{selectedVariation.versions[selectedVariation.currentVersionIndex]?.prompt}"</span>
-                      )
-                    ) : (
-                      selectedVariation.title
-                    )}
+                    {(() => {
+                      const currentVersionPrompt = selectedVariation.versions[selectedVariation.currentVersionIndex]?.prompt;
+                      if (!currentVersionPrompt) return selectedVariation.title;
+                      if (currentVersionPrompt.includes('[preset]')) {
+                        return (
+                          <span>
+                            <span className="text-amber-400">[preset]</span>
+                            <span className="italic text-white/60"> {currentVersionPrompt.replace(' [preset]', '')}</span>
+                          </span>
+                        );
+                      }
+                      return <span className="italic text-white/60">"{currentVersionPrompt}"</span>;
+                    })()}
                   </span>
                 </>
               )}
@@ -2365,6 +2679,49 @@ function HomeContent() {
                               });
                             }}
                             disabled={!backgroundCustomPrompt.trim() || currentVersionProcessing}
+                            className="p-2 rounded-full bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <Send className="w-4 h-4 text-white" />
+                          </button>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* Floating Model Input - shows when model tool selected */}
+              {selectedTool === 'model' && !isShowingGenerated && uploadedImage && (
+                <div className="absolute top-14 left-1/2 -translate-x-1/2 w-full max-w-md px-4">
+                  <div className="bg-black/70 backdrop-blur-md rounded-full border border-white/20 shadow-2xl flex items-center gap-2 pl-4 pr-1.5 py-1.5">
+                    {(() => {
+                      const currentVersionProcessing = originalVersions.length > 0 && originalVersions[originalVersionIndex]?.status === 'processing';
+                      return (
+                        <>
+                          <input
+                            type="text"
+                            placeholder="Describe a model..."
+                            value={modelCustomPrompt}
+                            onChange={(e) => setModelCustomPrompt(e.target.value)}
+                            className="flex-1 bg-transparent text-sm text-white placeholder:text-white/40 outline-none"
+                            disabled={currentVersionProcessing}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && modelCustomPrompt.trim() && !currentVersionProcessing) {
+                                requireAuth(() => {
+                                  handleApplyModelChange(modelCustomPrompt, 'Custom');
+                                  setModelCustomPrompt('');
+                                });
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={() => {
+                              requireAuth(() => {
+                                handleApplyModelChange(modelCustomPrompt, 'Custom');
+                                setModelCustomPrompt('');
+                              });
+                            }}
+                            disabled={!modelCustomPrompt.trim() || currentVersionProcessing}
                             className="p-2 rounded-full bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                           >
                             <Send className="w-4 h-4 text-white" />
@@ -3096,7 +3453,7 @@ function HomeContent() {
                 <button
                   onClick={handleGenerateBackgroundSuggestions}
                   disabled={isLoadingBackgroundSuggestions || !uploadedImage}
-                  className="w-full px-3 py-2.5 mb-4 rounded-lg text-sm bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  className="w-full px-3 py-2.5 mb-4 rounded-lg text-sm bg-gradient-to-r from-amber-600 to-orange-600 hover:brightness-110 transition-[filter] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
                   {isLoadingBackgroundSuggestions ? (
                     <>
@@ -3129,17 +3486,28 @@ function HomeContent() {
                         </>
                       ) : (
                         // Actual suggestions as pills
-                        backgroundSuggestions.map((suggestion) => (
-                          <button
-                            key={suggestion.id}
-                            onClick={() => {
-                              handleApplyBackgroundChange(suggestion.prompt, suggestion.name);
-                            }}
-                            className="px-3 py-1.5 rounded-full text-xs bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 hover:border-amber-500/60 transition-all text-amber-300"
-                          >
-                            {suggestion.name}
-                          </button>
-                        ))
+                        backgroundSuggestions.map((suggestion) => {
+                          const isUsed = usedBackgroundSuggestions.has(suggestion.id);
+                          return (
+                            <button
+                              key={suggestion.id}
+                              onClick={() => {
+                                requireAuth(() => {
+                                  setUsedBackgroundSuggestions(prev => new Set([...prev, suggestion.id]));
+                                  handleApplyBackgroundChange(suggestion.prompt, suggestion.name);
+                                });
+                              }}
+                              className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1.5 transition-all ${
+                                isUsed
+                                  ? 'bg-green-500/20 border border-green-500/40 text-green-300'
+                                  : 'bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 hover:border-amber-500/60 text-amber-300'
+                              }`}
+                            >
+                              {isUsed && <Check className="w-3 h-3" />}
+                              {suggestion.name}
+                            </button>
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -3149,20 +3517,318 @@ function HomeContent() {
                 <div className="flex-1 overflow-y-auto">
                   <h3 className="text-xs text-white/40 uppercase tracking-wide mb-2">Common Backgrounds</h3>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {BACKGROUND_SUGGESTIONS.map((suggestion) => (
-                      <button
-                        key={suggestion.id}
-                        onClick={() => {
-                          handleApplyBackgroundChange(suggestion.prompt, suggestion.name);
-                        }}
-                        className="px-2.5 py-2 rounded-lg text-left text-xs bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
-                      >
-                        <span className="text-white/80">{suggestion.name}</span>
-                      </button>
-                    ))}
+                    {BACKGROUND_SUGGESTIONS.map((suggestion) => {
+                      const isUsed = usedBackgroundSuggestions.has(suggestion.id);
+                      return (
+                        <button
+                          key={suggestion.id}
+                          onClick={() => {
+                            requireAuth(() => {
+                              setUsedBackgroundSuggestions(prev => new Set([...prev, suggestion.id]));
+                              handleApplyBackgroundChange(suggestion.prompt, suggestion.name);
+                            });
+                          }}
+                          className={`px-2.5 py-2 rounded-lg text-left text-xs flex items-center gap-1.5 transition-all ${
+                            isUsed
+                              ? 'bg-green-500/10 border border-green-500/30 text-green-300'
+                              : 'bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-white/80'
+                          }`}
+                        >
+                          {isUsed && <Check className="w-3 h-3 flex-shrink-0" />}
+                          <span>{suggestion.name}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
+              </div>
+            )}
+
+            {/* Model Tool */}
+            {selectedTool === 'model' && (
+              <div className="animate-in fade-in slide-in-from-left-2 duration-200 p-4 flex flex-col h-full overflow-hidden">
+                <h2 className="font-semibold mb-1">Model</h2>
+                <p className="text-xs text-white/50 mb-3">
+                  Change the model while preserving background, lighting & product.
+                </p>
+
+                {/* Preserve Outfit Toggle */}
+                <div className="flex items-center justify-between mb-4 p-2 rounded-lg bg-white/5 border border-white/10">
+                  <span className="text-sm text-white/70">Preserve outfit</span>
+                  <button
+                    onClick={() => setKeepClothing(!keepClothing)}
+                    className={`w-10 h-6 rounded-full transition-colors relative ${
+                      keepClothing ? 'bg-amber-600' : 'bg-white/20'
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                        keepClothing ? 'translate-x-5' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Generate AI Suggestions Button */}
+                <button
+                  onClick={handleGenerateModelSuggestions}
+                  disabled={isLoadingModelSuggestions || !uploadedImage}
+                  className="w-full px-3 py-2.5 mb-4 rounded-lg text-sm bg-gradient-to-r from-amber-600 to-orange-600 hover:brightness-110 transition-[filter] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  {isLoadingModelSuggestions ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Analyzing image...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Suggest models
+                    </>
+                  )}
+                </button>
+
+                {/* AI-Generated Suggestions with Skeleton Loading */}
+                {(isLoadingModelSuggestions || modelSuggestions.length > 0) && (
+                  <div className="mb-4">
+                    <h3 className="text-xs text-white/40 uppercase tracking-wide mb-2">AI Suggestions</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {isLoadingModelSuggestions ? (
+                        <>
+                          {[1, 2, 3, 4, 5].map((i) => (
+                            <div
+                              key={i}
+                              className="h-8 rounded-full bg-white/5 border border-white/10 animate-pulse"
+                              style={{ width: `${80 + Math.random() * 50}px` }}
+                            />
+                          ))}
+                        </>
+                      ) : (
+                        modelSuggestions.map((suggestion) => {
+                          const isUsed = usedModelSuggestions.has(suggestion.id);
+                          return (
+                            <button
+                              key={suggestion.id}
+                              onClick={() => {
+                                requireAuth(() => {
+                                  setUsedModelSuggestions(prev => new Set([...prev, suggestion.id]));
+                                  handleApplyModelChange(suggestion.prompt, suggestion.name);
+                                });
+                              }}
+                              className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1.5 transition-all ${
+                                isUsed
+                                  ? 'bg-green-500/20 border border-green-500/40 text-green-300'
+                                  : 'bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 hover:border-amber-500/60 text-amber-300'
+                              }`}
+                              title={suggestion.description}
+                            >
+                              {isUsed && <Check className="w-3 h-3" />}
+                              {suggestion.name}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Model Builder */}
+                <div className="flex-1 overflow-y-auto space-y-3">
+                  <h3 className="text-xs text-white/40 uppercase tracking-wide">Model Builder</h3>
+
+                  {/* Gender */}
+                  <div>
+                    <label className="text-xs text-white/50 mb-1.5 block">Gender</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {MODEL_OPTIONS.gender.map((option) => (
+                        <button
+                          key={option.id}
+                          onClick={() => setSelectedGender(selectedGender === option.id ? null : option.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs transition-all ${
+                            selectedGender === option.id
+                              ? 'bg-amber-600 text-white border border-amber-500'
+                              : 'bg-white/5 text-white/70 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Age Range */}
+                  <div>
+                    <label className="text-xs text-white/50 mb-1.5 block">Age Range</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {MODEL_OPTIONS.ageRange.map((option) => (
+                        <button
+                          key={option.id}
+                          onClick={() => setSelectedAgeRange(selectedAgeRange === option.id ? null : option.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs transition-all ${
+                            selectedAgeRange === option.id
+                              ? 'bg-amber-600 text-white border border-amber-500'
+                              : 'bg-white/5 text-white/70 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Ethnicity */}
+                  <div>
+                    <label className="text-xs text-white/50 mb-1.5 block">Ethnicity</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {MODEL_OPTIONS.ethnicity.map((option) => (
+                        <button
+                          key={option.id}
+                          onClick={() => setSelectedEthnicity(selectedEthnicity === option.id ? null : option.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs transition-all ${
+                            selectedEthnicity === option.id
+                              ? 'bg-amber-600 text-white border border-amber-500'
+                              : 'bg-white/5 text-white/70 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Hair Color */}
+                  <div>
+                    <label className="text-xs text-white/50 mb-1.5 block">Hair Color</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {MODEL_OPTIONS.hairColor.map((option) => (
+                        <button
+                          key={option.id}
+                          onClick={() => setSelectedHairColor(selectedHairColor === option.id ? null : option.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs transition-all ${
+                            selectedHairColor === option.id
+                              ? 'bg-amber-600 text-white border border-amber-500'
+                              : 'bg-white/5 text-white/70 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Hair Type */}
+                  <div>
+                    <label className="text-xs text-white/50 mb-1.5 block">Hair Type</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {MODEL_OPTIONS.hairType.map((option) => (
+                        <button
+                          key={option.id}
+                          onClick={() => setSelectedHairType(selectedHairType === option.id ? null : option.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs transition-all ${
+                            selectedHairType === option.id
+                              ? 'bg-amber-600 text-white border border-amber-500'
+                              : 'bg-white/5 text-white/70 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Body Type */}
+                  <div>
+                    <label className="text-xs text-white/50 mb-1.5 block">Body Type</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {MODEL_OPTIONS.bodyType.map((option) => (
+                        <button
+                          key={option.id}
+                          onClick={() => setSelectedBodyType(selectedBodyType === option.id ? null : option.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs transition-all ${
+                            selectedBodyType === option.id
+                              ? 'bg-amber-600 text-white border border-amber-500'
+                              : 'bg-white/5 text-white/70 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Expression/Mood */}
+                  <div>
+                    <label className="text-xs text-white/50 mb-1.5 block">Expression</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {MODEL_OPTIONS.expression.map((option) => (
+                        <button
+                          key={option.id}
+                          onClick={() => setSelectedExpression(selectedExpression === option.id ? null : option.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs transition-all ${
+                            selectedExpression === option.id
+                              ? 'bg-amber-600 text-white border border-amber-500'
+                              : 'bg-white/5 text-white/70 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Vibe/Energy */}
+                  <div>
+                    <label className="text-xs text-white/50 mb-1.5 block">Vibe</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {MODEL_OPTIONS.vibe.map((option) => (
+                        <button
+                          key={option.id}
+                          onClick={() => setSelectedVibe(selectedVibe === option.id ? null : option.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs transition-all ${
+                            selectedVibe === option.id
+                              ? 'bg-amber-600 text-white border border-amber-500'
+                              : 'bg-white/5 text-white/70 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 mt-4 pt-4 border-t border-white/10">
+                  <button
+                    onClick={clearModelSelections}
+                    className="flex-1 px-3 py-2 rounded-lg text-sm bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-white/70"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      const btn = e.currentTarget;
+                      requireAuth(() => {
+                        handleApplyModelBuilder();
+                        // Brief visual feedback
+                        btn.textContent = '✓ Generating';
+                        btn.classList.add('bg-green-600');
+                        btn.classList.remove('bg-amber-600');
+                        setTimeout(() => {
+                          btn.textContent = 'Generate';
+                          btn.classList.remove('bg-green-600');
+                          btn.classList.add('bg-amber-600');
+                        }, 800);
+                      });
+                    }}
+                    disabled={!selectedGender && !selectedAgeRange && !selectedEthnicity && !selectedHairColor && !selectedHairType && !selectedBodyType && !selectedExpression && !selectedVibe}
+                    className="flex-1 px-3 py-2 rounded-lg text-sm bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                  >
+                    Generate
+                  </button>
+                </div>
               </div>
             )}
 

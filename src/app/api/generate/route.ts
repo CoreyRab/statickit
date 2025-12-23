@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { image, mimeType, analysis, variationDescription, aspectRatio, isEdit, isBackgroundOnly } =
+    const { image, mimeType, analysis, variationDescription, aspectRatio, isEdit, isBackgroundOnly, isModelOnly, keepClothing } =
       await request.json();
 
     if (!image || !mimeType || !analysis || !variationDescription) {
@@ -117,6 +117,78 @@ OUTPUT REQUIREMENTS:
 - Professional advertising quality
 - Aspect ratio: ${aspectRatio}
 - No visible compositing artifacts - seamless integration`;
+    } else if (isModelOnly) {
+      // Model-only mode - changes ONLY the model/person, protects everything else
+      const clothingInstruction = keepClothing
+        ? 'The model must wear the EXACT same clothing as the original - same outfit, colors, fit, and styling. The clothes are part of the protected elements.'
+        : 'The model may wear different clothing appropriate to their style, but should match the formality and context of the scene.';
+
+      prompt = `MODEL/PERSON CHANGE ONLY - Replace the model while preserving everything else exactly.
+
+MODEL CHANGE REQUEST:
+${variationDescription}
+
+=== ABSOLUTE PROTECTION RULES ===
+
+**BACKGROUND**: Must remain EXACTLY as shown:
+- Same setting, environment, and all background elements
+- No changes to scenery, props, or surrounding objects
+- Identical composition and spatial arrangement
+- Same colors, textures, and details in the environment
+
+**LIGHTING**: Must remain EXACTLY as shown:
+- Same light direction, color temperature, and intensity
+- Same shadow patterns and ambient lighting
+- The new model must be lit IDENTICALLY to how the original model was lit
+- No changes to the overall lighting mood or atmosphere
+
+**PRODUCT**: Must remain EXACTLY as shown:
+- Same position, size, angle, and appearance
+- Same colors, textures, logos, and details
+- Do NOT move, resize, or alter the product
+- Any text or branding on the product stays identical
+
+**POSE & POSITION**: The new model MUST match the original EXACTLY:
+- IDENTICAL body pose - same arm positions, hand placement, body angle, stance
+- IDENTICAL head position and tilt angle
+- Occupy the exact same position in the frame
+- Maintain the exact same relationship to other objects in the scene
+- If sitting, sitting the same way. If standing, standing the same way.
+- Mirror the original pose as precisely as possible
+
+**FACIAL EXPRESSION**: The new model MUST have the SAME expression:
+- IDENTICAL emotional expression (smiling, serious, contemplative, etc.)
+- Same mouth position (open smile, closed smile, neutral, etc.)
+- Same eye direction and gaze (looking at camera, looking away, looking down at product, etc.)
+- Same overall facial energy and mood
+- The expression should feel like the same moment captured with a different person
+
+=== MODEL CHANGE ===
+
+Replace the model/person with: ${variationDescription}
+
+${clothingInstruction}
+
+INTEGRATION REQUIREMENTS:
+- The new model must match the EXACT same lighting as the original scene
+- Shadows ON the model must match the environment's light direction
+- Skin tones must respond naturally to the existing lighting color temperature
+- The model should look naturally photographed in this setting, NOT composited
+- Hair and skin should reflect the ambient light colors of the scene
+
+=== PARTIAL BODY HANDLING ===
+If the image shows only hands, arms, or partial body:
+- Change only the visible body parts to match the description
+- Match skin tone and characteristics as described
+- Maintain exact same pose and position relative to product
+- Keep any jewelry, watches, or accessories unless specifically asked to change
+
+OUTPUT REQUIREMENTS:
+- Professional advertising quality
+- Aspect ratio: ${aspectRatio}
+- Seamless, natural result - indistinguishable from original photography
+- The model should look like they were actually photographed in this exact scene
+- CRITICAL: The new model's pose and facial expression must MATCH the original exactly - same body language, same emotion, same gaze direction`;
     } else if (isEdit) {
       // Edit/refinement prompt - focuses on making specific changes to the existing generated image
       prompt = `Edit this advertising image according to the following instructions.
