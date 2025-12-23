@@ -1318,23 +1318,39 @@ function HomeContent() {
     if (!uploadedImage) return;
 
     setIsLoadingBackgroundSuggestions(true);
-    setBackgroundSuggestions([]);
 
     try {
-      // Get current image URL
+      // Get current image URL - use File directly if available
       const currentVersion = originalVersions.length > 0 ? originalVersions[originalVersionIndex] : null;
       const imageUrl = currentVersion?.imageUrl || uploadedImage.url;
 
-      const imageResponse = await fetch(imageUrl);
-      const blob = await imageResponse.blob();
-      const base64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]);
-        };
-        reader.readAsDataURL(blob);
-      });
+      let base64: string;
+      let mimeType: string;
+
+      if (imageUrl === uploadedImage.url && uploadedImage.file) {
+        // Use the original file directly
+        base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.readAsDataURL(uploadedImage.file);
+        });
+        mimeType = uploadedImage.file.type;
+      } else {
+        const imageResponse = await fetch(imageUrl);
+        const blob = await imageResponse.blob();
+        base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.readAsDataURL(blob);
+        });
+        mimeType = blob.type;
+      }
 
       // Use analysis if available for better suggestions
       const analysisToUse = analysis || {
@@ -1344,19 +1360,24 @@ function HomeContent() {
         mood: 'Not specified',
       };
 
+      // Pass existing suggestion names to avoid duplicates
+      const existingSuggestionNames = backgroundSuggestions.map(s => s.name);
+
       const response = await fetch('/api/suggest-backgrounds', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: base64,
-          mimeType: blob.type,
+          mimeType: mimeType,
           analysis: analysisToUse,
+          existingSuggestions: existingSuggestionNames,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        setBackgroundSuggestions(data.suggestions || []);
+        // Append new suggestions to existing ones
+        setBackgroundSuggestions(prev => [...prev, ...(data.suggestions || [])]);
       }
     } catch (err) {
       console.error('Background suggestions error:', err);
@@ -1482,22 +1503,38 @@ function HomeContent() {
     if (!uploadedImage) return;
 
     setIsLoadingModelSuggestions(true);
-    setModelSuggestions([]);
 
     try {
       const currentVersion = originalVersions.length > 0 ? originalVersions[originalVersionIndex] : null;
       const imageUrl = currentVersion?.imageUrl || uploadedImage.url;
 
-      const imageResponse = await fetch(imageUrl);
-      const blob = await imageResponse.blob();
-      const base64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]);
-        };
-        reader.readAsDataURL(blob);
-      });
+      let base64: string;
+      let mimeType: string;
+
+      if (imageUrl === uploadedImage.url && uploadedImage.file) {
+        // Use the original file directly
+        base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.readAsDataURL(uploadedImage.file);
+        });
+        mimeType = uploadedImage.file.type;
+      } else {
+        const imageResponse = await fetch(imageUrl);
+        const blob = await imageResponse.blob();
+        base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.readAsDataURL(blob);
+        });
+        mimeType = blob.type;
+      }
 
       const analysisToUse = analysis || {
         product: 'Unknown',
@@ -1506,19 +1543,24 @@ function HomeContent() {
         mood: 'Not specified',
       };
 
+      // Pass existing suggestion names to avoid duplicates
+      const existingSuggestionNames = modelSuggestions.map(s => s.name);
+
       const response = await fetch('/api/suggest-models', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: base64,
-          mimeType: blob.type,
+          mimeType: mimeType,
           analysis: analysisToUse,
+          existingSuggestions: existingSuggestionNames,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        setModelSuggestions(data.suggestions || []);
+        // Append new suggestions to existing ones
+        setModelSuggestions(prev => [...prev, ...(data.suggestions || [])]);
       }
     } catch (err) {
       console.error('Model suggestions error:', err);
@@ -2181,14 +2223,20 @@ function HomeContent() {
               <div className="flex items-center gap-1 p-1 bg-white/[0.02] border border-white/10 rounded-xl">
                 <button
                   onClick={() => setSelectedTool('iterations')}
-                  className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                  className={`px-3 py-2 rounded-lg flex items-center transition-all duration-200 text-sm font-medium ${
                     selectedTool === 'iterations'
-                      ? 'bg-amber-600 text-white'
-                      : 'text-white/50 hover:text-white hover:bg-white/10'
+                      ? 'bg-amber-600 text-white gap-2'
+                      : 'text-white/50 hover:text-white hover:bg-white/10 gap-0'
                   }`}
                 >
-                  <Layers className="w-4 h-4" />
-                  Versions
+                  <Layers className="w-4 h-4 flex-shrink-0" />
+                  <span className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-out ${
+                    selectedTool === 'iterations'
+                      ? 'max-w-[80px] opacity-100'
+                      : 'max-w-0 opacity-0'
+                  }`}>
+                    Versions
+                  </span>
                 </button>
 
                 {/* Divider between navigation and editing tools */}
@@ -2196,50 +2244,74 @@ function HomeContent() {
 
                 <button
                   onClick={() => setSelectedTool('edit')}
-                  className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                  className={`px-3 py-2 rounded-lg flex items-center transition-all duration-200 text-sm font-medium ${
                     selectedTool === 'edit'
-                      ? 'bg-amber-600 text-white'
-                      : 'text-white/50 hover:text-white hover:bg-white/10'
+                      ? 'bg-amber-600 text-white gap-2'
+                      : 'text-white/50 hover:text-white hover:bg-white/10 gap-0'
                   }`}
                 >
-                  <Wand2 className="w-4 h-4" />
-                  Edit
+                  <Wand2 className="w-4 h-4 flex-shrink-0" />
+                  <span className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-out ${
+                    selectedTool === 'edit'
+                      ? 'max-w-[80px] opacity-100'
+                      : 'max-w-0 opacity-0'
+                  }`}>
+                    Edit
+                  </span>
                 </button>
 
                 <button
                   onClick={() => setSelectedTool('backgrounds')}
-                  className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                  className={`px-3 py-2 rounded-lg flex items-center transition-all duration-200 text-sm font-medium ${
                     selectedTool === 'backgrounds'
-                      ? 'bg-amber-600 text-white'
-                      : 'text-white/50 hover:text-white hover:bg-white/10'
+                      ? 'bg-amber-600 text-white gap-2'
+                      : 'text-white/50 hover:text-white hover:bg-white/10 gap-0'
                   }`}
                 >
-                  <ImageIcon className="w-4 h-4" />
-                  Backgrounds
+                  <ImageIcon className="w-4 h-4 flex-shrink-0" />
+                  <span className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-out ${
+                    selectedTool === 'backgrounds'
+                      ? 'max-w-[100px] opacity-100'
+                      : 'max-w-0 opacity-0'
+                  }`}>
+                    Backgrounds
+                  </span>
                 </button>
 
                 <button
                   onClick={() => setSelectedTool('model')}
-                  className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                  className={`px-3 py-2 rounded-lg flex items-center transition-all duration-200 text-sm font-medium ${
                     selectedTool === 'model'
-                      ? 'bg-amber-600 text-white'
-                      : 'text-white/50 hover:text-white hover:bg-white/10'
+                      ? 'bg-amber-600 text-white gap-2'
+                      : 'text-white/50 hover:text-white hover:bg-white/10 gap-0'
                   }`}
                 >
-                  <User className="w-4 h-4" />
-                  Model
+                  <User className="w-4 h-4 flex-shrink-0" />
+                  <span className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-out ${
+                    selectedTool === 'model'
+                      ? 'max-w-[80px] opacity-100'
+                      : 'max-w-0 opacity-0'
+                  }`}>
+                    Model
+                  </span>
                 </button>
 
                 <button
                   onClick={() => setSelectedTool('export')}
-                  className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium ${
+                  className={`px-3 py-2 rounded-lg flex items-center transition-all duration-200 text-sm font-medium ${
                     selectedTool === 'export'
-                      ? 'bg-amber-600 text-white'
-                      : 'text-white/50 hover:text-white hover:bg-white/10'
+                      ? 'bg-amber-600 text-white gap-2'
+                      : 'text-white/50 hover:text-white hover:bg-white/10 gap-0'
                   }`}
                 >
-                  <Download className="w-4 h-4" />
-                  Export
+                  <Download className="w-4 h-4 flex-shrink-0" />
+                  <span className={`overflow-hidden whitespace-nowrap transition-all duration-200 ease-out ${
+                    selectedTool === 'export'
+                      ? 'max-w-[80px] opacity-100'
+                      : 'max-w-0 opacity-0'
+                  }`}>
+                    Export
+                  </span>
                 </button>
               </div>
             </div>
@@ -3453,70 +3525,65 @@ function HomeContent() {
                 <button
                   onClick={handleGenerateBackgroundSuggestions}
                   disabled={isLoadingBackgroundSuggestions || !uploadedImage}
-                  className="w-full px-3 py-2.5 mb-4 rounded-lg text-sm bg-gradient-to-r from-amber-600 to-orange-600 hover:brightness-110 transition-[filter] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  className="w-full px-3 py-2 mb-4 rounded-lg text-sm border border-white/20 hover:border-amber-500/50 hover:bg-amber-500/10 text-white/70 hover:text-amber-400 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isLoadingBackgroundSuggestions ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Analyzing image...
+                      <span className="text-white/50">Analyzing...</span>
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-4 h-4" />
-                      Generate suggestions
+                      <Sparkles className="w-4 h-4 text-amber-500/70" />
+                      Suggest backgrounds
                     </>
                   )}
                 </button>
 
-                {/* AI-Generated Suggestions with Skeleton Loading */}
-                {(isLoadingBackgroundSuggestions || backgroundSuggestions.length > 0) && (
-                  <div className="mb-4">
-                    <h3 className="text-xs text-white/40 uppercase tracking-wide mb-2">AI Suggestions</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {isLoadingBackgroundSuggestions ? (
-                        // Skeleton loading placeholders
-                        <>
-                          {[1, 2, 3, 4, 5].map((i) => (
-                            <div
-                              key={i}
-                              className="h-8 rounded-full bg-white/5 border border-white/10 animate-pulse"
-                              style={{ width: `${60 + Math.random() * 40}px` }}
-                            />
-                          ))}
-                        </>
-                      ) : (
-                        // Actual suggestions as pills
-                        backgroundSuggestions.map((suggestion) => {
-                          const isUsed = usedBackgroundSuggestions.has(suggestion.id);
-                          return (
-                            <button
-                              key={suggestion.id}
-                              onClick={() => {
-                                requireAuth(() => {
-                                  setUsedBackgroundSuggestions(prev => new Set([...prev, suggestion.id]));
-                                  handleApplyBackgroundChange(suggestion.prompt, suggestion.name);
-                                });
-                              }}
-                              className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1.5 transition-all ${
-                                isUsed
-                                  ? 'bg-green-500/20 border border-green-500/40 text-green-300'
-                                  : 'bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 hover:border-amber-500/60 text-amber-300'
-                              }`}
-                            >
-                              {isUsed && <Check className="w-3 h-3" />}
-                              {suggestion.name}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Common Backgrounds - Compact Grid */}
+                {/* Backgrounds Grid */}
                 <div className="flex-1 overflow-y-auto">
-                  <h3 className="text-xs text-white/40 uppercase tracking-wide mb-2">Common Backgrounds</h3>
                   <div className="grid grid-cols-2 gap-1.5">
+                    {/* Separator above AI suggestions */}
+                    {(isLoadingBackgroundSuggestions || backgroundSuggestions.length > 0) && (
+                      <div className="col-span-2 h-px bg-white/10 my-1" />
+                    )}
+
+                    {/* AI-Generated Suggestions */}
+                    {isLoadingBackgroundSuggestions && (
+                      // Skeleton loading placeholders
+                      <>
+                        {[1, 2, 3, 4].map((i) => (
+                          <div
+                            key={`skeleton-${i}`}
+                            className="h-9 rounded-lg bg-amber-500/5 border border-amber-500/20 animate-pulse"
+                          />
+                        ))}
+                      </>
+                    )}
+                    {backgroundSuggestions.map((suggestion) => {
+                      const isUsed = usedBackgroundSuggestions.has(suggestion.id);
+                      return (
+                        <button
+                          key={suggestion.id}
+                          onClick={() => {
+                            requireAuth(() => {
+                              setUsedBackgroundSuggestions(prev => new Set([...prev, suggestion.id]));
+                              handleApplyBackgroundChange(suggestion.prompt, suggestion.name);
+                            });
+                          }}
+                          className={`px-2.5 py-2 rounded-lg text-left text-xs flex items-center gap-1.5 transition-all ${
+                            isUsed
+                              ? 'bg-green-500/10 border border-green-500/30 text-green-300'
+                              : 'bg-amber-500/5 border border-amber-500/40 hover:bg-amber-500/10 hover:border-amber-500/60 text-white/80'
+                          }`}
+                        >
+                          {isUsed && <Check className="w-3 h-3 flex-shrink-0" />}
+                          <span>{suggestion.name}</span>
+                        </button>
+                      );
+                    })}
+
+                    {/* Common Backgrounds */}
                     {BACKGROUND_SUGGESTIONS.map((suggestion) => {
                       const isUsed = usedBackgroundSuggestions.has(suggestion.id);
                       return (
@@ -3574,16 +3641,16 @@ function HomeContent() {
                 <button
                   onClick={handleGenerateModelSuggestions}
                   disabled={isLoadingModelSuggestions || !uploadedImage}
-                  className="w-full px-3 py-2.5 mb-4 rounded-lg text-sm bg-gradient-to-r from-amber-600 to-orange-600 hover:brightness-110 transition-[filter] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  className="w-full px-3 py-2 mb-4 rounded-lg text-sm border border-white/20 hover:border-amber-500/50 hover:bg-amber-500/10 text-white/70 hover:text-amber-400 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isLoadingModelSuggestions ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Analyzing image...
+                      <span className="text-white/50">Analyzing...</span>
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-4 h-4" />
+                      <Sparkles className="w-4 h-4 text-amber-500/70" />
                       Suggest models
                     </>
                   )}

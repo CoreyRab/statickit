@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response;
     }
 
-    const { image, mimeType, analysis } = await request.json();
+    const { image, mimeType, analysis, existingSuggestions } = await request.json();
 
     if (!image || !mimeType) {
       return NextResponse.json(
@@ -31,7 +31,12 @@ export async function POST(request: NextRequest) {
     // Use vision model to analyze the image and suggest backgrounds
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-    const prompt = `Analyze this advertising image and suggest 6 alternative background environments.
+    // Build exclusion list if there are existing suggestions
+    const exclusionNote = existingSuggestions && existingSuggestions.length > 0
+      ? `\n\nIMPORTANT - DO NOT suggest any of these backgrounds (already suggested):\n${existingSuggestions.map((s: string) => `- ${s}`).join('\n')}\n\nYour suggestions must be COMPLETELY DIFFERENT from the above list.`
+      : '';
+
+    const prompt = `Analyze this advertising image and suggest 5 alternative background environments.
 
 CURRENT IMAGE ANALYSIS:
 ${analysis ? `
@@ -40,12 +45,13 @@ ${analysis ? `
 - Target Audience: ${analysis.target_audience || 'Unknown'}
 - Current Mood: ${analysis.mood || 'Unknown'}
 ` : 'No prior analysis available - analyze the image directly.'}
+${exclusionNote}
 
 YOUR TASK:
 1. Identify the main subject/product in the image
 2. Identify any people/models in the image
 3. Consider where this product would naturally be used
-4. Suggest 6 VISUALLY DISTINCT background environments
+4. Suggest 5 VISUALLY DISTINCT background environments
 
 REQUIREMENTS FOR SUGGESTIONS:
 - Each background must be contextually appropriate for the product/subject
@@ -54,7 +60,7 @@ REQUIREMENTS FOR SUGGESTIONS:
 - The subject and any people will remain EXACTLY the same - only the background changes
 - Suggest a mix of indoor and outdoor environments where appropriate
 
-Return a JSON array with exactly 6 suggestions:
+Return a JSON array with exactly 5 suggestions:
 [
   {
     "id": "unique-id-1",
@@ -91,9 +97,10 @@ Return ONLY the JSON array, no other text.`;
 
     const suggestions = JSON.parse(jsonMatch[0]);
 
-    // Ensure each suggestion has an id
+    // Ensure each suggestion has a unique id using timestamp
+    const timestamp = Date.now();
     const suggestionsWithIds = suggestions.map((s: any, index: number) => ({
-      id: s.id || `bg-suggestion-${index}`,
+      id: `bg-${timestamp}-${index}`,
       name: s.name,
       prompt: s.prompt,
     }));

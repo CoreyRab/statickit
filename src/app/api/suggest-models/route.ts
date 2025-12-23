@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response;
     }
 
-    const { image, mimeType, analysis } = await request.json();
+    const { image, mimeType, analysis, existingSuggestions } = await request.json();
 
     if (!image || !mimeType) {
       return NextResponse.json(
@@ -31,7 +31,12 @@ export async function POST(request: NextRequest) {
     // Use vision model to analyze the image and suggest alternative models
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-    const prompt = `Analyze this advertising image and suggest 5 alternative models that would appeal to different target audiences.
+    // Build exclusion list if there are existing suggestions
+    const exclusionNote = existingSuggestions && existingSuggestions.length > 0
+      ? `\n\nIMPORTANT - DO NOT suggest any of these model types (already suggested):\n${existingSuggestions.map((s: string) => `- ${s}`).join('\n')}\n\nYour suggestions must be COMPLETELY DIFFERENT from the above list.`
+      : '';
+
+    const prompt = `Analyze this advertising image and suggest 5 alternative models that would appeal to different target audiences.${exclusionNote}
 
 CURRENT IMAGE ANALYSIS:
 ${analysis ? `
@@ -93,9 +98,10 @@ Return ONLY the JSON array, no other text.`;
 
     const suggestions = JSON.parse(jsonMatch[0]);
 
-    // Ensure each suggestion has required fields
+    // Ensure each suggestion has required fields and unique ids
+    const timestamp = Date.now();
     const suggestionsWithIds = suggestions.map((s: any, index: number) => ({
-      id: s.id || `model-suggestion-${index}`,
+      id: `model-${timestamp}-${index}`,
       name: s.name || `Model ${index + 1}`,
       description: s.description || '',
       audience: s.audience || '',
