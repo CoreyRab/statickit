@@ -57,6 +57,7 @@ import { useUser, SignInButton, UserButton } from '@clerk/nextjs';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { LandingPage } from '@/components/landing/LandingPage';
+import { Footer } from '@/components/landing/Footer';
 import { uploadFileToConvex, dataUrlToBlob } from '@/lib/convex-storage';
 import { WelcomeModal, ApiKeySetupModal, SecurityBadge } from '@/components/onboarding';
 // PlanSelectionModal hidden for BYOK-only mode
@@ -130,7 +131,7 @@ interface Variation {
 function HomeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [step, setStep] = useState<Step>('upload');
+  const [step, setStep] = useState<Step>('editor');
   const [selectedTool, setSelectedTool] = useState<Tool>(null);
   const [uploadedImage, setUploadedImage] = useState<UploadedImage | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -391,17 +392,15 @@ function HomeContent() {
     }
   }, []);
 
-  // Check if user has seen welcome modal
+  // Show welcome modal for non-signed-in users on every load
   useEffect(() => {
-    const hasSeenWelcome = localStorage.getItem('statickit_has_seen_welcome');
-    if (!hasSeenWelcome) {
+    if (isUserLoaded && !user) {
       setShowWelcomeModal(true);
     }
-  }, []);
+  }, [isUserLoaded, user]);
 
   // Handle welcome modal dismiss
   const handleDismissWelcome = () => {
-    localStorage.setItem('statickit_has_seen_welcome', 'true');
     setShowWelcomeModal(false);
   };
 
@@ -617,7 +616,7 @@ function HomeContent() {
       'image/webp': ['.webp'],
     },
     maxFiles: 1,
-    disabled: step !== 'upload',
+    disabled: uploadedImage !== null, // Only disabled when we have an image
   });
 
   // Generate iterations on-demand (called from the Iterations tool)
@@ -1857,7 +1856,7 @@ function HomeContent() {
 
   const handleReset = () => {
     if (uploadedImage?.url) URL.revokeObjectURL(uploadedImage.url);
-    setStep('upload');
+    // Stay in editor mode, just clear the image
     setUploadedImage(null);
     setAnalysis(null);
     setVariations([]);
@@ -1872,6 +1871,7 @@ function HomeContent() {
     setOriginalVersionIndex(0);
     setOriginalResizedVersions([]);
     setViewingOriginalResizedSize(null);
+    setSelectedTool(null);
   };
 
   const handleDownload = async (imageUrl: string, filename: string) => {
@@ -2098,27 +2098,33 @@ function HomeContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f0f0f] text-white">
+    <div className="min-h-screen bg-[#0f0f0f] text-white flex flex-col">
       {/* Header */}
       <header className="border-b border-white/10 bg-[#0f0f0f]/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-semibold">
-            <img src="/logo.svg" alt="StaticKit" className="w-7 h-7" />
-            <span className="text-lg">StaticKit</span>
+          {/* Left: Logo + How it Works */}
+          <div className="flex items-center gap-4">
+            <button onClick={handleReset} className="flex items-center gap-2 font-semibold hover:opacity-80 transition-opacity">
+              <img src="/logo.svg" alt="StaticKit" className="w-7 h-7" />
+              <span className="text-lg">StaticKit</span>
+            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowWelcomeModal(true)}
+                  className="text-white/40 hover:text-white hover:bg-white/10 px-2"
+                >
+                  <Info className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>How it Works</TooltipContent>
+            </Tooltip>
           </div>
 
+          {/* Right: Actions */}
           <div className="flex items-center gap-3">
-            {step === 'editor' && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleReset}
-                className="text-white/60 hover:text-white hover:bg-white/10"
-              >
-                <Plus className="w-4 h-4 mr-1.5" />
-                Upload
-              </Button>
-            )}
             {user ? (
               <>
                 <Link href="/history">
@@ -2127,15 +2133,6 @@ function HomeContent() {
                     My Ads
                   </Button>
                 </Link>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowWelcomeModal(true)}
-                  className="text-white/60 hover:text-white hover:bg-white/10"
-                >
-                  <Info className="w-4 h-4 mr-1.5" />
-                  How it Works
-                </Button>
                 <Link href="/settings">
                   <Button variant="ghost" size="sm" className="text-white/60 hover:text-white hover:bg-white/10">
                     <Settings className="w-4 h-4" />
@@ -2144,23 +2141,12 @@ function HomeContent() {
                 <UserButton afterSignOutUrl="/" />
               </>
             ) : (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowWelcomeModal(true)}
-                  className="text-white/60 hover:text-white hover:bg-white/10"
-                >
-                  <Info className="w-4 h-4 mr-1.5" />
-                  How it Works
+              <SignInButton mode="modal">
+                <Button variant="ghost" size="sm" className="text-white/60 hover:text-white hover:bg-white/10">
+                  <LogIn className="w-4 h-4 mr-1.5" />
+                  Sign in
                 </Button>
-                <SignInButton mode="modal">
-                  <Button variant="ghost" size="sm" className="text-white/60 hover:text-white hover:bg-white/10">
-                    <LogIn className="w-4 h-4 mr-1.5" />
-                    Sign in
-                  </Button>
-                </SignInButton>
-              </>
+              </SignInButton>
             )}
           </div>
         </div>
@@ -2168,7 +2154,7 @@ function HomeContent() {
 
       {/* Upload State */}
       {step === 'upload' && (
-        <main className="max-w-3xl mx-auto px-6 py-16">
+        <main className="flex-1 max-w-3xl mx-auto px-6 py-16">
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
               Iterate on Your Ads
@@ -2221,11 +2207,26 @@ function HomeContent() {
             {/* Horizontal Toolbar - Above Image */}
             <div className="flex items-center justify-center mb-4">
               <div className="flex items-center gap-1 p-1 bg-white/[0.02] border border-white/10 rounded-xl">
+                {/* New Ad Button */}
+                <button
+                  onClick={handleReset}
+                  className="px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all duration-200 text-sm font-medium text-white/50 hover:text-white hover:bg-white/10"
+                >
+                  <Plus className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs">New</span>
+                </button>
+
+                {/* Divider */}
+                <div className="w-px h-6 bg-white/20 mx-1" />
+
                 <button
                   onClick={() => setSelectedTool('iterations')}
+                  disabled={!uploadedImage}
                   className={`px-3 py-2 rounded-lg flex items-center transition-all duration-200 text-sm font-medium ${
                     selectedTool === 'iterations'
                       ? 'bg-amber-600 text-white gap-2'
+                      : !uploadedImage
+                      ? 'text-white/30 cursor-not-allowed gap-0'
                       : 'text-white/50 hover:text-white hover:bg-white/10 gap-0'
                   }`}
                 >
@@ -2244,9 +2245,12 @@ function HomeContent() {
 
                 <button
                   onClick={() => setSelectedTool('edit')}
+                  disabled={!uploadedImage}
                   className={`px-3 py-2 rounded-lg flex items-center transition-all duration-200 text-sm font-medium ${
                     selectedTool === 'edit'
                       ? 'bg-amber-600 text-white gap-2'
+                      : !uploadedImage
+                      ? 'text-white/30 cursor-not-allowed gap-0'
                       : 'text-white/50 hover:text-white hover:bg-white/10 gap-0'
                   }`}
                 >
@@ -2262,9 +2266,12 @@ function HomeContent() {
 
                 <button
                   onClick={() => setSelectedTool('backgrounds')}
+                  disabled={!uploadedImage}
                   className={`px-3 py-2 rounded-lg flex items-center transition-all duration-200 text-sm font-medium ${
                     selectedTool === 'backgrounds'
                       ? 'bg-amber-600 text-white gap-2'
+                      : !uploadedImage
+                      ? 'text-white/30 cursor-not-allowed gap-0'
                       : 'text-white/50 hover:text-white hover:bg-white/10 gap-0'
                   }`}
                 >
@@ -2280,9 +2287,12 @@ function HomeContent() {
 
                 <button
                   onClick={() => setSelectedTool('model')}
+                  disabled={!uploadedImage}
                   className={`px-3 py-2 rounded-lg flex items-center transition-all duration-200 text-sm font-medium ${
                     selectedTool === 'model'
                       ? 'bg-amber-600 text-white gap-2'
+                      : !uploadedImage
+                      ? 'text-white/30 cursor-not-allowed gap-0'
                       : 'text-white/50 hover:text-white hover:bg-white/10 gap-0'
                   }`}
                 >
@@ -2298,9 +2308,12 @@ function HomeContent() {
 
                 <button
                   onClick={() => setSelectedTool('export')}
+                  disabled={!uploadedImage}
                   className={`px-3 py-2 rounded-lg flex items-center transition-all duration-200 text-sm font-medium ${
                     selectedTool === 'export'
                       ? 'bg-amber-600 text-white gap-2'
+                      : !uploadedImage
+                      ? 'text-white/30 cursor-not-allowed gap-0'
                       : 'text-white/50 hover:text-white hover:bg-white/10 gap-0'
                   }`}
                 >
@@ -2680,6 +2693,31 @@ function HomeContent() {
                     </div>
                   )}
                 </>
+              ) : !uploadedImage ? (
+                <div
+                  {...getRootProps()}
+                  className={`flex flex-col items-center justify-center w-full h-full gap-4 rounded-2xl border-2 border-dashed transition-all ${
+                    isDragActive
+                      ? 'border-amber-500 bg-amber-500/10'
+                      : 'border-white/20 hover:border-white/40 bg-white/5'
+                  }`}
+                >
+                  <input {...getInputProps()} />
+                  <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center">
+                    <Upload className="w-8 h-8 text-white/60" />
+                  </div>
+                  {isDragActive ? (
+                    <p className="text-amber-400 font-medium text-lg">Drop your ad here...</p>
+                  ) : (
+                    <>
+                      <div className="text-center">
+                        <p className="font-medium text-lg mb-1">Drop your ad image here</p>
+                        <p className="text-white/50 text-sm">or click to browse</p>
+                      </div>
+                      <p className="text-xs text-white/30">PNG, JPG, WebP • Max 10MB</p>
+                    </>
+                  )}
+                </div>
               ) : (
                 <div className="text-white/30">No image</div>
               )}
@@ -4388,6 +4426,7 @@ function HomeContent() {
         onOpenChange={setShowApiKeySetup}
       />
 
+      {step === 'upload' && <Footer />}
     </div>
   );
 }
