@@ -50,7 +50,8 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { LandingPage } from '@/components/landing/LandingPage';
 import { uploadFileToConvex, dataUrlToBlob } from '@/lib/convex-storage';
-import { PlanSelectionModal } from '@/components/PlanSelectionModal';
+// PlanSelectionModal hidden for BYOK-only mode
+// import { PlanSelectionModal } from '@/components/PlanSelectionModal';
 
 type Step = 'upload' | 'editor';
 type Tool = 'edit' | 'iterations' | 'export' | null;
@@ -138,7 +139,7 @@ function HomeContent() {
   } | null>(null);
   const [additionalContext, setAdditionalContext] = useState('');
   const [showSignUpPrompt, setShowSignUpPrompt] = useState(false);
-  const [showPlanSelection, setShowPlanSelection] = useState(false);
+  // const [showPlanSelection, setShowPlanSelection] = useState(false); // Hidden for BYOK-only mode
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [isSuggestingIteration, setIsSuggestingIteration] = useState(false);
   const [isAnalyzingForIterations, setIsAnalyzingForIterations] = useState(false);
@@ -146,14 +147,19 @@ function HomeContent() {
   const [showCustomIteration, setShowCustomIteration] = useState(false);
   const [customIterationDescription, setCustomIterationDescription] = useState('');
 
-  // Get current user's subscription status
+  // Get current user's subscription status and BYOK status
   const dbUser = useQuery(api.users.getCurrent);
+  const hasApiKey = useQuery(api.users.hasApiKey);
   const ADMIN_EMAILS = ['coreyrab@gmail.com'];
   const isAdmin = dbUser?.email && ADMIN_EMAILS.includes(dbUser.email.toLowerCase());
   const hasSubscription = isAdmin || (dbUser?.plan && dbUser.plan !== 'none' && dbUser.credits > 0);
+  // User can access editor if they have BYOK key OR subscription
+  const canAccessEditor = isAdmin || hasSubscription || hasApiKey;
+  // User can save to history only if they have subscription (BYOK-only users cannot save)
+  const canSaveToHistory = isAdmin || hasSubscription;
 
   // Debug: log user info
-  console.log('dbUser:', dbUser, 'isAdmin:', isAdmin, 'hasSubscription:', hasSubscription);
+  console.log('dbUser:', dbUser, 'isAdmin:', isAdmin, 'hasSubscription:', hasSubscription, 'hasApiKey:', hasApiKey);
   const [showArchived, setShowArchived] = useState(false);
 
   // Original image editing state
@@ -1333,6 +1339,12 @@ function HomeContent() {
   const handleSaveToHistory = async () => {
     if (!user || !uploadedImage || !analysis) return;
 
+    // BYOK-only users cannot save to history
+    if (!canSaveToHistory) {
+      alert('Saving to history requires a subscription. You can still download your images directly.');
+      return;
+    }
+
     const completedVariations = variations.filter(v => v.status === 'completed' && v.imageUrl);
     if (completedVariations.length === 0) return;
 
@@ -1380,29 +1392,30 @@ function HomeContent() {
       setShowSignUpPrompt(true);
       return;
     }
-    // User is signed in, check subscription (skip if still loading or admin)
-    if (dbUser !== undefined && !hasSubscription) {
-      setPendingAction(() => action);
-      setShowPlanSelection(true);
+    // User is signed in, check if they have BYOK key configured
+    if (dbUser !== undefined && !canAccessEditor) {
+      // Redirect to settings to add API key
+      router.push('/settings');
       return;
     }
     action();
   };
 
-  // Handle successful sign-in - check if plan selection is needed
+  // Handle successful sign-in - check if API key is needed
   useEffect(() => {
     if (user && showSignUpPrompt) {
       setShowSignUpPrompt(false);
-      // After sign-in, check if user needs to select a plan (wait for dbUser to load)
-      if (dbUser !== undefined && !hasSubscription) {
-        setShowPlanSelection(true);
-      } else if (pendingAction && hasSubscription) {
-        // User has subscription, execute pending action
+      // After sign-in, check if user needs to add API key (wait for dbUser to load)
+      if (dbUser !== undefined && !canAccessEditor) {
+        // Redirect to settings to add API key
+        router.push('/settings');
+      } else if (pendingAction && canAccessEditor) {
+        // User has API key, execute pending action
         pendingAction();
         setPendingAction(null);
       }
     }
-  }, [user, dbUser, hasSubscription, showSignUpPrompt, pendingAction]);
+  }, [user, dbUser, canAccessEditor, showSignUpPrompt, pendingAction, router]);
 
   // Show landing page for non-authenticated users who haven't uploaded yet
   if (isUserLoaded && step === 'upload') {
@@ -1685,13 +1698,13 @@ function HomeContent() {
                   {/* Label row */}
                   <span className="text-xs text-white/50 text-center">
                     {selectedVariation.versions[selectedVariation.currentVersionIndex]?.prompt ? (
-                      selectedVariation.versions[selectedVariation.currentVersionIndex].prompt.includes('[preset]') ? (
+                      selectedVariation.versions[selectedVariation.currentVersionIndex]?.prompt?.includes('[preset]') ? (
                         <span>
                           <span className="text-amber-400">[preset]</span>
-                          <span className="italic text-white/60"> {selectedVariation.versions[selectedVariation.currentVersionIndex].prompt.replace(' [preset]', '')}</span>
+                          <span className="italic text-white/60"> {selectedVariation.versions[selectedVariation.currentVersionIndex]?.prompt?.replace(' [preset]', '')}</span>
                         </span>
                       ) : (
-                        <span className="italic text-white/60">"{selectedVariation.versions[selectedVariation.currentVersionIndex].prompt}"</span>
+                        <span className="italic text-white/60">"{selectedVariation.versions[selectedVariation.currentVersionIndex]?.prompt}"</span>
                       )
                     ) : (
                       selectedVariation.title
@@ -3220,14 +3233,22 @@ function HomeContent() {
             {/* Footer - Show for iterations tool */}
             {selectedTool === 'iterations' && user && completedCount > 0 && (
               <div className="p-4 border-t border-white/10">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleSaveToHistory}
-                  className="w-full border-white/10 text-white/60 hover:text-white hover:bg-white/10"
-                >
-                  Save to History
-                </Button>
+                {canSaveToHistory ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleSaveToHistory}
+                    className="w-full border-white/10 text-white/60 hover:text-white hover:bg-white/10"
+                  >
+                    Save to History
+                  </Button>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-xs text-white/40">
+                      Download your images to keep them. History feature coming soon!
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -3278,14 +3299,7 @@ function HomeContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Plan Selection Modal */}
-      <PlanSelectionModal
-        isOpen={showPlanSelection}
-        onClose={() => {
-          setShowPlanSelection(false);
-          setPendingAction(null);
-        }}
-      />
+      {/* Plan Selection Modal - Hidden for BYOK-only mode */}
 
       {/* Download Confirmation Modal */}
       <Dialog open={!!downloadModal} onOpenChange={(open) => !open && setDownloadModal(null)}>

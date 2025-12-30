@@ -230,3 +230,113 @@ export const resetCredits = mutation({
     return { success: true, newCredits: planCredits };
   },
 });
+
+// ============================================
+// BYOK (Bring Your Own Key) Functions
+// ============================================
+
+// Store encrypted API key for BYOK user
+export const setApiKey = mutation({
+  args: {
+    encryptedApiKey: v.string(),
+    apiKeyIv: v.string(),
+    apiKeyAuthTag: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    await ctx.db.patch(user._id, {
+      encryptedApiKey: args.encryptedApiKey,
+      apiKeyIv: args.apiKeyIv,
+      apiKeyAuthTag: args.apiKeyAuthTag,
+      apiKeyAddedAt: Date.now(),
+      tier: "byok",
+    });
+
+    return { success: true };
+  },
+});
+
+// Remove API key (revoke BYOK access)
+export const removeApiKey = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Determine new tier based on subscription status
+    const newTier = user.subscriptionStatus === "active" ? "paid" : "none";
+
+    await ctx.db.patch(user._id, {
+      encryptedApiKey: undefined,
+      apiKeyIv: undefined,
+      apiKeyAuthTag: undefined,
+      apiKeyAddedAt: undefined,
+      tier: newTier,
+    });
+
+    return { success: true };
+  },
+});
+
+// Check if current user has an API key configured
+export const hasApiKey = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return false;
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    return !!user?.encryptedApiKey;
+  },
+});
+
+// Get encrypted key data (for API routes to decrypt server-side)
+export const getEncryptedKey = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user?.encryptedApiKey || !user?.apiKeyIv || !user?.apiKeyAuthTag) {
+      return null;
+    }
+
+    return {
+      encryptedApiKey: user.encryptedApiKey,
+      apiKeyIv: user.apiKeyIv,
+      apiKeyAuthTag: user.apiKeyAuthTag,
+    };
+  },
+});

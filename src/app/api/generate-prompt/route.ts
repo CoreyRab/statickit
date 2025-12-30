@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { auth } from '@clerk/nextjs/server';
 import { generalRateLimiter, checkRateLimit } from '@/lib/rate-limit';
-
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
+import { getGeminiClient } from '@/lib/user-api-key';
 
 // Virality level descriptions - from standard ads to scroll-stopping viral content
 const WEIRDNESS_LEVELS = {
@@ -112,6 +110,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Get user's Gemini client (uses their BYOK key if configured)
+    const { genAI } = await getGeminiClient(userId);
 
     const level = getWeirdnessLevel(weirdnessLevel);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });

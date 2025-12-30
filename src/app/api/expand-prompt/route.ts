@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { auth } from '@clerk/nextjs/server';
 import { generalRateLimiter, checkRateLimit } from '@/lib/rate-limit';
-
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
+import { getGeminiClient } from '@/lib/user-api-key';
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +16,9 @@ export async function POST(request: NextRequest) {
     if (!rateLimitResult.success) {
       return rateLimitResult.response;
     }
+
+    // Get user's Gemini client (uses their BYOK key if configured)
+    const { genAI } = await getGeminiClient(userId);
 
     const { shortPrompt, analysis } = await request.json();
 

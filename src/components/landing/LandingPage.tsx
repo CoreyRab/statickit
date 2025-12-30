@@ -6,7 +6,8 @@ import { LandingHero } from '../landing-backup/LandingHero';
 import { BentoGrid } from '../landing-backup/BentoGrid';
 import { HowItWorks } from '../landing-backup/HowItWorks';
 import { UseCases } from '../landing-backup/UseCases';
-import { Pricing } from '../landing-backup/Pricing';
+// Pricing hidden for BYOK-only mode
+// import { Pricing } from '../landing-backup/Pricing';
 import { LandingCTA } from '../landing-backup/LandingCTA';
 
 interface LandingPageProps {
@@ -38,7 +39,7 @@ export function LandingPage({ onUpload }: LandingPageProps) {
         <BentoGrid />
         <HowItWorks />
         <UseCases />
-        <Pricing />
+        {/* Pricing hidden for BYOK-only mode */}
         <LandingCTA />
       </main>
     </div>

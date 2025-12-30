@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Settings, Loader2, Trash2, User, BarChart3, CreditCard, Sparkles, ExternalLink, Check } from 'lucide-react';
+import { ArrowLeft, Settings, Loader2, Trash2, User, BarChart3, CreditCard, Sparkles, ExternalLink, Check, Key, X } from 'lucide-react';
 import { useUser, SignInButton, UserButton } from '@clerk/nextjs';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
@@ -28,8 +28,15 @@ function SettingsContent() {
   const generations = useQuery(api.generations.getByUser);
   const dbUser = useQuery(api.users.getCurrent);
   const deleteGeneration = useMutation(api.generations.remove);
+  const hasApiKeyQuery = useQuery(api.users.hasApiKey);
+  const setApiKeyMutation = useMutation(api.users.setApiKey);
+  const removeApiKeyMutation = useMutation(api.users.removeApiKey);
 
   const [defaultWeirdness, setDefaultWeirdness] = useState(50);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isValidatingKey, setIsValidatingKey] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [isRemovingKey, setIsRemovingKey] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [isLoadingPortal, setIsLoadingPortal] = useState(false);
@@ -143,6 +150,54 @@ function SettingsContent() {
     }
   };
 
+  const handleValidateAndSaveKey = async () => {
+    if (!apiKeyInput.trim()) return;
+
+    setIsValidatingKey(true);
+    setApiKeyError(null);
+
+    try {
+      const response = await fetch('/api/validate-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: apiKeyInput.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!data.valid) {
+        setApiKeyError(data.error || 'Invalid API key');
+        return;
+      }
+
+      // Save encrypted key to Convex
+      await setApiKeyMutation({
+        encryptedApiKey: data.encrypted,
+        apiKeyIv: data.iv,
+        apiKeyAuthTag: data.authTag,
+      });
+
+      setApiKeyInput('');
+      setApiKeyError(null);
+    } catch (err) {
+      console.error('API key validation error:', err);
+      setApiKeyError('Failed to validate API key. Please try again.');
+    } finally {
+      setIsValidatingKey(false);
+    }
+  };
+
+  const handleRemoveKey = async () => {
+    setIsRemovingKey(true);
+    try {
+      await removeApiKeyMutation({});
+    } catch (err) {
+      console.error('Remove API key error:', err);
+    } finally {
+      setIsRemovingKey(false);
+    }
+  };
+
   // Show loading while checking auth
   if (!isUserLoaded) {
     return (
@@ -185,18 +240,7 @@ function SettingsContent() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-8">
-        {/* Success Message */}
-        {showSuccessMessage && (
-          <div className="mb-6 bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-center gap-3">
-            <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
-              <Check className="w-4 h-4 text-green-400" />
-            </div>
-            <div>
-              <p className="font-medium text-green-400">Subscription activated!</p>
-              <p className="text-sm text-white/60">Your plan has been updated. You now have access to your new credits.</p>
-            </div>
-          </div>
-        )}
+        {/* Success Message - Hidden for BYOK-only mode */}
 
         <div className="flex items-center gap-4 mb-8">
           <Link href="/">
@@ -236,79 +280,115 @@ function SettingsContent() {
             </div>
           </div>
 
-          {/* Subscription & Billing Section */}
+          {/* API Key Section */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center">
-                <CreditCard className="w-5 h-5 text-amber-400" />
+              <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                <Key className="w-5 h-5 text-emerald-400" />
               </div>
               <div>
-                <h2 className="font-semibold">Subscription & Credits</h2>
-                <p className="text-sm text-white/50">Manage your plan and credits</p>
+                <h2 className="font-semibold">Google API Key</h2>
+                <p className="text-sm text-white/50">Use your own API key for unlimited generations</p>
               </div>
             </div>
 
-            <div className="space-y-4">
-              {/* Current Plan */}
-              <div className="flex items-center justify-between py-3 px-4 bg-white/5 rounded-xl">
-                <div>
-                  <p className="text-white/60 text-sm">Current Plan</p>
-                  <p className={`font-semibold text-lg ${currentPlanInfo.color}`}>
-                    {currentPlanInfo.name}
-                  </p>
-                </div>
-                {hasSubscription ? (
+            {hasApiKeyQuery ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between py-3 px-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span className="text-emerald-400 font-medium">API Key Connected</span>
+                  </div>
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={handleManageSubscription}
-                    disabled={isLoadingPortal}
-                    className="border-white/20 text-white hover:bg-white/10"
+                    onClick={handleRemoveKey}
+                    disabled={isRemovingKey}
+                    className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50"
                   >
-                    {isLoadingPortal ? (
+                    {isRemovingKey ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      <>
-                        Manage
-                        <ExternalLink className="w-3 h-3 ml-1" />
-                      </>
+                      'Remove Key'
                     )}
                   </Button>
-                ) : (
-                  <Link href="/#pricing">
-                    <Button
-                      size="sm"
-                      className="bg-violet-500 hover:bg-violet-400 text-white"
-                    >
-                      Subscribe
-                    </Button>
-                  </Link>
-                )}
-              </div>
-
-              {/* Credits */}
-              <div className="py-3 px-4 bg-white/5 rounded-xl">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-white/60 text-sm">Credits Remaining</p>
-                  <p className="font-semibold text-lg">
-                    {dbUser?.credits ?? currentPlanInfo.credits} / {currentPlanInfo.credits}
+                </div>
+                <p className="text-xs text-white/40">
+                  {dbUser?.apiKeyAddedAt && (
+                    <>Key added on {new Date(dbUser.apiKeyAddedAt).toLocaleDateString()}. </>
+                  )}
+                  Your key is encrypted and stored securely.
+                </p>
+                <div className="mt-3 p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/10">
+                  <p className="text-sm text-emerald-400">
+                    You have unlimited access to the image editor using your own API key.
                   </p>
                 </div>
-                <div className="w-full bg-white/10 rounded-full h-2">
-                  <div
-                    className="bg-gradient-to-r from-violet-500 to-indigo-500 h-2 rounded-full transition-all duration-300"
-                    style={{
-                      width: `${Math.min(100, ((dbUser?.credits ?? currentPlanInfo.credits) / currentPlanInfo.credits) * 100)}%`,
-                    }}
-                  />
-                </div>
-                <p className="text-xs text-white/40 mt-2">
-                  Credits reset monthly on your billing date
-                </p>
               </div>
-
-            </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    placeholder="AIza..."
+                    value={apiKeyInput}
+                    onChange={(e) => {
+                      setApiKeyInput(e.target.value);
+                      setApiKeyError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && apiKeyInput.trim()) {
+                        handleValidateAndSaveKey();
+                      }
+                    }}
+                    className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                  />
+                  <Button
+                    onClick={handleValidateAndSaveKey}
+                    disabled={isValidatingKey || !apiKeyInput.trim()}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                  >
+                    {isValidatingKey ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Add Key'
+                    )}
+                  </Button>
+                </div>
+                {apiKeyError && (
+                  <div className="flex items-center gap-2 text-red-400 text-sm">
+                    <X className="w-4 h-4" />
+                    {apiKeyError}
+                  </div>
+                )}
+                <p className="text-xs text-white/40">
+                  Get your API key from{' '}
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-violet-400 hover:underline"
+                  >
+                    Google AI Studio
+                  </a>
+                  . Your key is encrypted before storage and never logged.
+                </p>
+                <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                  <p className="text-sm text-white/60">
+                    <span className="font-medium text-white">Free:</span> Use your own API key for unlimited generations.
+                    Download your images directly after generating.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Subscription & Billing Section - Hidden for BYOK-only mode */}
+          {/* TODO: Uncomment when paid tiers are ready
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+            ...subscription UI...
+          </div>
+          */}
 
           {/* Usage Stats Section */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6">

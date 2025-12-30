@@ -21,6 +21,12 @@ export default defineSchema({
     stripePriceId: v.optional(v.string()),
     subscriptionStatus: v.optional(v.string()), // 'active' | 'canceled' | 'past_due' etc.
     currentPeriodEnd: v.optional(v.number()), // Unix timestamp
+    // BYOK (Bring Your Own Key) fields
+    encryptedApiKey: v.optional(v.string()), // AES-256-GCM encrypted API key
+    apiKeyIv: v.optional(v.string()), // Initialization vector for decryption
+    apiKeyAuthTag: v.optional(v.string()), // Auth tag for GCM verification
+    apiKeyAddedAt: v.optional(v.number()), // Timestamp when key was added
+    tier: v.optional(v.string()), // 'byok' | 'paid' | 'none'
   })
     .index("by_clerk_id", ["clerkId"])
     .index("by_stripe_customer_id", ["stripeCustomerId"]),

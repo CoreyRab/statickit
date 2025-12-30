@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { auth } from '@clerk/nextjs/server';
 import { generateRateLimiter, checkRateLimit } from '@/lib/rate-limit';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../../../convex/_generated/api';
+import { getGeminiClient } from '@/lib/user-api-key';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 // Admin emails that bypass credit checks
@@ -25,22 +24,33 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response;
     }
 
-    // Check credits (skip for admin users)
-    const user = await convex.query(api.users.getByClerkId, { clerkId: userId });
+    // Get user's Gemini client (uses their BYOK key if configured, otherwise server key)
+    const { genAI, isByok, user } = await getGeminiClient(userId);
     const isAdmin = user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
-    if (!user) {
-      // Create user if doesn't exist (first time)
-      // This will be handled by the mutation
-    } else if (!isAdmin && user.credits < 1) {
-      return NextResponse.json(
-        {
-          error: 'Insufficient credits',
-          message: 'You have run out of credits. Please upgrade your plan to continue generating images.',
-          credits: user.credits,
-        },
-        { status: 402 } // Payment Required
-      );
+    // BYOK users skip credit checks - they use their own API quota
+    // Non-BYOK users need credits
+    if (!isByok && !isAdmin) {
+      if (!user) {
+        return NextResponse.json(
+          {
+            error: 'Account required',
+            message: 'Please sign in and add an API key or subscribe to a plan.',
+          },
+          { status: 403 }
+        );
+      }
+
+      if (user.credits < 1) {
+        return NextResponse.json(
+          {
+            error: 'Insufficient credits',
+            message: 'You have run out of credits. Please upgrade your plan or add your own API key to continue.',
+            credits: user.credits,
+          },
+          { status: 402 } // Payment Required
+        );
+      }
     }
 
     const { image, mimeType, analysis, variationDescription, aspectRatio, isEdit } =
@@ -152,15 +162,17 @@ Generate the variation that implements the requested change while keeping the pr
           const imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
           console.log('Generated image successfully');
 
-          // Deduct 1 credit for successful generation
-          try {
-            await convex.mutation(api.users.useCredits, { amount: 1 });
-          } catch (creditError) {
-            console.error('Failed to deduct credit:', creditError);
-            // Continue anyway - don't block the user
+          // Deduct 1 credit for successful generation (skip for BYOK users)
+          if (!isByok && !isAdmin) {
+            try {
+              await convex.mutation(api.users.useCredits, { amount: 1 });
+            } catch (creditError) {
+              console.error('Failed to deduct credit:', creditError);
+              // Continue anyway - don't block the user
+            }
           }
 
-          return NextResponse.json({ imageUrl });
+          return NextResponse.json({ imageUrl, isByok });
         }
         if ('text' in part && part.text) {
           console.log('Text response:', part.text.substring(0, 100));
