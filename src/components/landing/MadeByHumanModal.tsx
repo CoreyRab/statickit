@@ -24,7 +24,7 @@ export function MadeByHumanModal({ open, onOpenChange }: MadeByHumanModalProps) 
         <ScrollArea className="h-[60vh] pr-4">
           <div className="space-y-6 text-sm text-muted-foreground">
             <p className="text-base text-foreground">
-              Hi, I&apos;m{" "}
+              I&apos;m{" "}
               <a
                 href="https://x.com/coreyrab"
                 target="_blank"
@@ -33,96 +33,65 @@ export function MadeByHumanModal({ open, onOpenChange }: MadeByHumanModalProps) 
               >
                 Corey Rabazinski
               </a>
-              , and I built StaticKit.
+              . I built StaticKit.
             </p>
 
             <section className="space-y-3">
               <h3 className="text-base font-semibold text-foreground">
-                Why I Built This
+                Why This Exists
               </h3>
               <p>
-                I&apos;ve spent my career in marketing&mdash;leading teams at{" "}
-                <a
-                  href="https://www.revenuecat.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  RevenueCat
-                </a>
-                , Manifold (acquired by Snyk), and Code School (acquired by
-                Pluralsight). Before that, I ran digital advertising for brands
-                like Universal Studios and Holiday Inn.
+                I work in marketing. For years, I&apos;ve had ideas for visuals
+                sitting in my head&mdash;product shots with different backgrounds,
+                variations of hero images, quick edits that shouldn&apos;t require
+                a designer or a week in the queue.
               </p>
               <p>
-                Throughout all of it, I&apos;ve watched marketers struggle with
-                creative production. You have the ideas, but turning them into
-                polished visuals often means waiting on designers, learning
-                complex tools, or settling for &quot;good enough.&quot;
+                AI image tools got good enough to actually solve this. But most of
+                them are either expensive, watermarked, or buried behind complex
+                interfaces.
               </p>
               <p>
-                AI is changing that. But most AI tools are still built for
-                technical users, not marketers. I wanted to fix that.
+                StaticKit is my attempt to fix that. Upload an image, describe what
+                you want, get a result. No accounts, no subscriptions. You bring
+                your own API key and the cost is pennies.
               </p>
             </section>
 
             <section className="space-y-3">
               <h3 className="text-base font-semibold text-foreground">
-                Making AI Accessible
+                Why Open Source
               </h3>
               <p>
-                StaticKit is designed to put powerful AI image editing directly
-                in the hands of marketers. No complex prompts. No steep learning
-                curve. Just upload your image, pick what you want to change, and
-                let AI do the heavy lifting.
-              </p>
-              <p>
-                It&apos;s open source because I believe these tools should be
-                accessible to everyone&mdash;whether you&apos;re at a Fortune
-                500 or running a one-person shop.
+                I wanted to build something useful and share it openly. If it helps
+                you ship faster, great. If you want to fork it and build something
+                better, even better.
               </p>
             </section>
 
             <section className="space-y-3">
               <h3 className="text-base font-semibold text-foreground">
-                Other Projects
+                What Else I&apos;m Working On
               </h3>
               <p>
-                I build tools for marketers. Check out{" "}
+                StaticKit is part of{" "}
                 <a
                   href="https://tinyfunnels.ai"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline"
                 >
-                  TinyFunnels
-                </a>{" "}
-                if you&apos;re interested in what else I&apos;m working on.
-              </p>
-            </section>
-
-            <section className="space-y-3">
-              <h3 className="text-base font-semibold text-foreground">
-                Get in Touch
-              </h3>
-              <p>
-                Got feedback, ideas, or just want to say hi? Find me on{" "}
+                  Tiny Funnels
+                </a>
+                , a small studio where I build AI-powered tools for marketing
+                and sales teams. I share updates on{" "}
                 <a
                   href="https://x.com/coreyrab"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline"
                 >
-                  X @coreyrab
-                </a>{" "}
-                or check out my{" "}
-                <a
-                  href="https://linkedin.com/in/crabazinski"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  LinkedIn
+                  X
                 </a>
                 .
               </p>
