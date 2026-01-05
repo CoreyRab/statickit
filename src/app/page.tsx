@@ -5048,50 +5048,50 @@ function HomeContent() {
               setSelectedTool('iterations');
               setIsMobileSidebarOpen(true);
             }}
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 rounded-lg transition-colors ${selectedTool === 'iterations' ? 'bg-primary text-primary-foreground' : ''}`}
           >
-            <Layers className={`w-5 h-5 transition-colors ${selectedTool === 'iterations' ? 'text-orange-500' : 'text-muted-foreground'}`} />
-            <span className={`text-[10px] font-medium transition-colors ${selectedTool === 'iterations' ? 'text-orange-500' : 'text-muted-foreground'}`}>Versions</span>
+            <Layers className={`w-5 h-5 transition-colors ${selectedTool === 'iterations' ? '' : 'text-muted-foreground'}`} />
+            <span className={`text-[10px] font-medium transition-colors ${selectedTool === 'iterations' ? '' : 'text-muted-foreground'}`}>Versions</span>
           </button>
           <button
             onClick={() => {
               setSelectedTool('edit');
               setIsMobileSidebarOpen(true);
             }}
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 rounded-lg transition-colors ${selectedTool === 'edit' ? 'bg-primary text-primary-foreground' : ''}`}
           >
-            <Wand2 className={`w-5 h-5 transition-colors ${selectedTool === 'edit' ? 'text-orange-500' : 'text-muted-foreground'}`} />
-            <span className={`text-[10px] font-medium transition-colors ${selectedTool === 'edit' ? 'text-orange-500' : 'text-muted-foreground'}`}>Edit</span>
+            <Wand2 className={`w-5 h-5 transition-colors ${selectedTool === 'edit' ? '' : 'text-muted-foreground'}`} />
+            <span className={`text-[10px] font-medium transition-colors ${selectedTool === 'edit' ? '' : 'text-muted-foreground'}`}>Edit</span>
           </button>
           <button
             onClick={() => {
               setSelectedTool('backgrounds');
               setIsMobileSidebarOpen(true);
             }}
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 rounded-lg transition-colors ${selectedTool === 'backgrounds' ? 'bg-primary text-primary-foreground' : ''}`}
           >
-            <ImageIcon className={`w-5 h-5 transition-colors ${selectedTool === 'backgrounds' ? 'text-orange-500' : 'text-muted-foreground'}`} />
-            <span className={`text-[10px] font-medium transition-colors ${selectedTool === 'backgrounds' ? 'text-orange-500' : 'text-muted-foreground'}`}>Background</span>
+            <ImageIcon className={`w-5 h-5 transition-colors ${selectedTool === 'backgrounds' ? '' : 'text-muted-foreground'}`} />
+            <span className={`text-[10px] font-medium transition-colors ${selectedTool === 'backgrounds' ? '' : 'text-muted-foreground'}`}>Background</span>
           </button>
           <button
             onClick={() => {
               setSelectedTool('model');
               setIsMobileSidebarOpen(true);
             }}
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 rounded-lg transition-colors ${selectedTool === 'model' ? 'bg-primary text-primary-foreground' : ''}`}
           >
-            <User className={`w-5 h-5 transition-colors ${selectedTool === 'model' ? 'text-orange-500' : 'text-muted-foreground'}`} />
-            <span className={`text-[10px] font-medium transition-colors ${selectedTool === 'model' ? 'text-orange-500' : 'text-muted-foreground'}`}>Model</span>
+            <User className={`w-5 h-5 transition-colors ${selectedTool === 'model' ? '' : 'text-muted-foreground'}`} />
+            <span className={`text-[10px] font-medium transition-colors ${selectedTool === 'model' ? '' : 'text-muted-foreground'}`}>Model</span>
           </button>
           <button
             onClick={() => {
               setSelectedTool('export');
               setIsMobileSidebarOpen(true);
             }}
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 mx-1 rounded-lg transition-colors ${selectedTool === 'export' ? 'bg-primary text-primary-foreground' : ''}`}
           >
-            <Expand className={`w-[18px] h-[18px] transition-colors ${selectedTool === 'export' ? 'text-orange-500' : 'text-muted-foreground'}`} />
-            <span className={`text-[10px] font-medium transition-colors ${selectedTool === 'export' ? 'text-orange-500' : 'text-muted-foreground'}`}>Resize</span>
+            <Expand className={`w-6 h-6 transition-colors ${selectedTool === 'export' ? '' : 'text-muted-foreground'}`} />
+            <span className={`text-[10px] font-medium transition-colors ${selectedTool === 'export' ? '' : 'text-muted-foreground'}`}>Resize</span>
           </button>
         </div>
       </div>
