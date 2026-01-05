@@ -168,7 +168,7 @@ export function ApiKeySetupModal({
                   Your API key stays on your device
                 </p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Stored locally in your browser only—<strong className="text-foreground/80">never sent to our servers</strong>. Only pay for what you use.
+                  Stored locally in your browser only, <strong className="text-foreground/80">never sent to our servers</strong>. Only pay for what you use.
                 </p>
               </div>
             </div>
