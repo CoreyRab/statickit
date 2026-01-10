@@ -140,8 +140,12 @@ export default function BlogPostContent({ post }: BlogPostContentProps) {
       {/* Reading Progress Bar */}
       <div className="fixed top-0 left-0 right-0 h-1 bg-primary/20 z-50">
         <div
-          className="h-full bg-primary transition-all duration-150 ease-out"
-          style={{ width: `${readingProgress}%` }}
+          className="h-full bg-primary will-change-transform"
+          style={{
+            transform: `scaleX(${readingProgress / 100})`,
+            transformOrigin: 'left',
+            transition: 'transform 150ms cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
         />
       </div>
 
